@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AppSettings } from '../types';
+import type { AppSettings } from '../types';
 import { Button } from './Button';
 import { Save, Lock, Key } from 'lucide-react';
 

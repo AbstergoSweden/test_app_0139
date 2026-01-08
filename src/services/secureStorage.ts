@@ -1,6 +1,7 @@
 import { encryptData, decryptData } from "../utils/crypto";
-import { UserData, GalleryItem } from "../types";
+import type { UserData, GalleryItem } from "../types";
 import { saveBlob, getBlobs, deleteBlobs, getAllBlobIds } from "./blobStorage";
+import { migrateUserData, stampDataVersion } from "../utils/migrations";
 
 const USERS_INDEX_KEY = "venice_app_users_index"; // Stores list of usernames
 const USER_PREFIX = "venice_user_data_";
@@ -116,7 +117,14 @@ export const loginUser = async (username: string, password: string): Promise<Use
     const rawData = localStorage.getItem(USER_PREFIX + username);
     if (!rawData) throw new Error("User data not found.");
 
-    const userData = await decryptData(rawData, password) as UserData;
+    const decryptedData = await decryptData(rawData, password);
+    
+    // Apply migrations if needed
+    const { data: userData, migrated, fromVersion } = migrateUserData(decryptedData);
+    
+    if (migrated) {
+        console.log(`[SecureStorage] Migrated user data from v${fromVersion} to current version`);
+    }
 
     // Rehydrate blobs from IndexedDB
     userData.gallery = await rehydrateGalleryBlobs(userData.gallery);
@@ -135,11 +143,11 @@ export const saveUserData = async (data: UserData, password: string): Promise<vo
         }
     }
 
-    // Create metadata-only copy (no base64 data)
-    const metadataOnly: UserData = {
+    // Create metadata-only copy with version stamp (no base64 data)
+    const metadataOnly = stampDataVersion({
         ...data,
         gallery: stripBlobsFromGallery(data.gallery),
-    };
+    });
 
     const encrypted = await encryptData(metadataOnly, password);
     try {

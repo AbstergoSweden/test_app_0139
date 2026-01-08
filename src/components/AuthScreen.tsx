@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { UserData } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import type { UserData } from '../types';
 import { loginUser, registerUser, getRegisteredUsers, getLastUser, setLastUser, DEV_USER } from '../services/secureStorage';
+import { evaluatePasswordStrength, MIN_PASSWORD_SCORE } from '../utils/passwordStrength';
 import { Button } from './Button';
 import { Lock, AlertCircle, User as UserIcon } from 'lucide-react';
 
@@ -16,6 +17,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
     const [loading, setLoading] = useState(false);
 
     const knownUsers = getRegisteredUsers();
+    
+    // Evaluate password strength for registration mode
+    const passwordStrength = useMemo(() => {
+        if (mode !== 'register') return null;
+        return evaluatePasswordStrength(password);
+    }, [password, mode]);
 
     // Memory: Load last user on mount
     useEffect(() => {
@@ -30,6 +37,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
+        
+        // Check password strength for registration
+        if (mode === 'register' && passwordStrength && !passwordStrength.isAcceptable) {
+            setError(`Password is too weak. ${passwordStrength.feedback[0] || 'Please choose a stronger password.'}`);
+            return;
+        }
+        
         setLoading(true);
         
         // Small delay to prevent UI freezing immediately during crypto ops
@@ -51,8 +65,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
                 setLastUser(username);
                 onAuthenticated(user, password);
             }
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'An error occurred';
+            setError(message);
         } finally {
             setLoading(false);
         }
@@ -106,6 +121,40 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
                             placeholder="Enter password"
                             required
                         />
+                        
+                        {/* Password Strength Indicator - only show in register mode */}
+                        {mode === 'register' && password && passwordStrength && (
+                            <div className="mt-2 space-y-2">
+                                {/* Strength bar */}
+                                <div className="flex gap-1">
+                                    {[0, 1, 2, 3, 4].map((level) => (
+                                        <div
+                                            key={level}
+                                            className={`h-1.5 flex-1 rounded-full transition-colors ${
+                                                level <= passwordStrength.score 
+                                                    ? passwordStrength.color 
+                                                    : 'bg-slate-600'
+                                            }`}
+                                        />
+                                    ))}
+                                </div>
+                                {/* Strength label and feedback */}
+                                <div className="flex justify-between items-start text-xs">
+                                    <span className={`font-medium ${
+                                        passwordStrength.score >= MIN_PASSWORD_SCORE 
+                                            ? 'text-green-400' 
+                                            : 'text-orange-400'
+                                    }`}>
+                                        {passwordStrength.label}
+                                    </span>
+                                    {passwordStrength.feedback.length > 0 && (
+                                        <span className="text-slate-400 text-right max-w-[70%]">
+                                            {passwordStrength.feedback[0]}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <Button variant="primary" className="w-full py-3 text-lg mt-4" isLoading={loading}>

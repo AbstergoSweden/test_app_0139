@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ControlPanel } from './ControlPanel';
-import { GalleryItem, GenerationParams, AppSettings } from '../types';
+import type { GalleryItem, GenerationParams, AppSettings } from '../types';
 import { generateImage } from '../services/veniceService';
 import { generateGeminiImage, generateGeminiVideo } from '../services/geminiService';
 import { compressImage } from '../utils';
 import { Gallery } from './Gallery';
 
-import { ToastType } from './Toast';
+import type { ToastType } from './Toast';
 import { ProgressBar } from './ProgressBar';
 
 interface ImageGenScreenProps {
@@ -18,20 +18,66 @@ interface ImageGenScreenProps {
     onAddToast: (message: string, type: ToastType) => void;
 }
 
-export const ImageGenScreen: React.FC<ImageGenScreenProps> = ({ settings, recentItems, onNewItem, onViewItem, onAddToast }) => {
+// Placeholder item for optimistic UI
+interface PendingItem extends GalleryItem {
+    isPending: true;
+}
+
+export const ImageGenScreen: React.FC<ImageGenScreenProps> = ({ settings, recentItems, onNewItem, onUpdateItem: _onUpdateItem, onViewItem, onAddToast }) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
     const [progress, setProgress] = useState(0);
+    const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
+    
+    // Track current generation to allow cancellation
+    const generationAbortRef = useRef<AbortController | null>(null);
+    
+    // Clean up pending items on unmount
+    useEffect(() => {
+        return () => {
+            if (generationAbortRef.current) {
+                generationAbortRef.current.abort();
+            }
+        };
+    }, []);
+
+    // Create optimistic placeholder item
+    const createPendingItem = (params: GenerationParams, index: number): PendingItem => ({
+        id: `pending-${Date.now()}-${index}`,
+        base64: '', // Empty - will show skeleton
+        params,
+        createdAt: Date.now(),
+        mediaType: params.mediaType || 'image',
+        isPending: true,
+    });
+
+    // Replace pending item with real item
+    const resolvePendingItem = (pendingId: string, realItem: GalleryItem) => {
+        setPendingItems(prev => prev.filter(p => p.id !== pendingId));
+        onNewItem(realItem);
+    };
+
+    // Remove failed pending item
+    const rejectPendingItem = (pendingId: string) => {
+        setPendingItems(prev => prev.filter(p => p.id !== pendingId));
+    };
 
     const handleGenerate = async (params: GenerationParams, variants: number) => {
         setIsGenerating(true);
         setStatusMessage("Initializing generation...");
         setProgress(0);
+        
+        // Create abort controller for this generation
+        generationAbortRef.current = new AbortController();
 
         try {
             // --- GEMINI HANDLER ---
             if (params.provider === 'gemini') {
                 if (!settings.geminiApiKey) throw new Error("Gemini API Key missing.");
+
+                // Add optimistic pending item
+                const pendingItem = createPendingItem(params, 0);
+                setPendingItems(prev => [pendingItem, ...prev]);
 
                 const newItemId = Date.now() + Math.random().toString(36);
                 let base64Result = "";
@@ -58,13 +104,23 @@ export const ImageGenScreen: React.FC<ImageGenScreenProps> = ({ settings, recent
                     createdAt: Date.now(),
                     mediaType: params.mediaType
                 };
-                onNewItem(newItem);
+                
+                // Replace pending with real item (optimistic update complete)
+                resolvePendingItem(pendingItem.id, newItem);
                 onAddToast("Generated successfully!", 'success');
             }
             // --- VENICE HANDLER ---
             else {
                 const baseSeed = params.seed;
                 let completedCount = 0;
+
+                // Add optimistic pending items for all variants
+                const pendingItemsList: PendingItem[] = [];
+                for (let i = 0; i < variants; i++) {
+                    const pending = createPendingItem({ ...params, seed: baseSeed + i }, i);
+                    pendingItemsList.push(pending);
+                }
+                setPendingItems(prev => [...pendingItemsList, ...prev]);
 
                 for (let i = 0; i < variants; i++) {
                     const percentStart = Math.round((i / variants) * 100);
@@ -73,6 +129,7 @@ export const ImageGenScreen: React.FC<ImageGenScreenProps> = ({ settings, recent
 
                     const currentSeed = baseSeed + i;
                     const requestParams = { ...params, seed: currentSeed };
+                    const pendingItem = pendingItemsList[i];
 
                     try {
                         const result = await generateImage(requestParams, settings.veniceApiKey);
@@ -84,11 +141,16 @@ export const ImageGenScreen: React.FC<ImageGenScreenProps> = ({ settings, recent
                             createdAt: Date.now(),
                             mediaType: 'image'
                         };
-                        onNewItem(newItem);
+                        
+                        // Replace this pending item with real item
+                        resolvePendingItem(pendingItem.id, newItem);
                         completedCount++;
-                    } catch (e: any) {
+                    } catch (e: unknown) {
+                        const message = e instanceof Error ? e.message : 'Unknown error';
                         console.error(`Variant ${i + 1} failed:`, e);
-                        onAddToast(`Variant ${i + 1} failed: ${e.message}`, 'error');
+                        onAddToast(`Variant ${i + 1} failed: ${message}`, 'error');
+                        // Remove failed pending item
+                        rejectPendingItem(pendingItem.id);
                     }
                 }
 
@@ -98,16 +160,22 @@ export const ImageGenScreen: React.FC<ImageGenScreenProps> = ({ settings, recent
                 }
             }
             setProgress(100);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Generation error:", err);
+            
+            // Clear all pending items on error
+            setPendingItems([]);
 
-            let message = err.message || "Generation failed.";
+            let message = err instanceof Error ? err.message : "Generation failed.";
 
             // Handle raw JSON object errors often returned by GenAI/Cloud SDKs
-            if (err.error && err.error.message) {
-                message = err.error.message;
-            } else if (typeof err === 'object' && err.message) {
-                message = err.message;
+            if (typeof err === 'object' && err !== null) {
+                const errObj = err as { error?: { message?: string }; message?: string };
+                if (errObj.error?.message) {
+                    message = errObj.error.message;
+                } else if (errObj.message) {
+                    message = errObj.message;
+                }
             }
 
             // Check for specific permission/leaked key errors
@@ -122,6 +190,7 @@ export const ImageGenScreen: React.FC<ImageGenScreenProps> = ({ settings, recent
 
             onAddToast(message, 'error');
         } finally {
+            generationAbortRef.current = null;
             setTimeout(() => {
                 setIsGenerating(false);
                 setProgress(0);
@@ -132,6 +201,10 @@ export const ImageGenScreen: React.FC<ImageGenScreenProps> = ({ settings, recent
     const handleEnhance = async (item: GalleryItem) => {
         onViewItem(item);
     };
+    
+    // Combine pending items with recent items for display
+    // Filter out pending items from the combined list to show them separately with loading state
+    const displayItems = [...pendingItems, ...recentItems];
 
     return (
         <div className="flex flex-col lg:flex-row gap-8 max-w-7xl mx-auto">
@@ -156,10 +229,10 @@ export const ImageGenScreen: React.FC<ImageGenScreenProps> = ({ settings, recent
             <div className="lg:w-2/3">
                 <h3 className="text-xl font-bold text-white mb-4">Recent Generations</h3>
                 <Gallery
-                    items={recentItems.slice(0, 6)}
+                    items={displayItems.slice(0, 6)}
                     onEnhance={handleEnhance}
                     onView={onViewItem}
-                    isLoading={isGenerating}
+                    isLoading={isGenerating && pendingItems.length === 0}
                 />
             </div>
         </div>

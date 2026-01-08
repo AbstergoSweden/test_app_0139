@@ -9,7 +9,7 @@ import tseslint from 'typescript-eslint';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', '*.config.js', '*.config.ts'] },
+  { ignores: ['dist', 'node_modules', '*.config.js', '*.config.ts', 'e2e/**'] },
   js.configs.recommended,
   // Use recommended (non-type-checked) to avoid pre-existing any usage issues
   ...tseslint.configs.recommended,

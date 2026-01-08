@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { UserData, AppView, AppSettings, GalleryItem, ChatSession } from './types';
+import type { UserData, AppView, AppSettings, GalleryItem, ChatSession } from './types';
 import { saveUserData } from './services/secureStorage';
 import { AuthScreen } from './components/AuthScreen';
 import { ImageGenScreen } from './components/ImageGenScreen';
@@ -7,7 +7,8 @@ import { SettingsScreen } from './components/SettingsScreen';
 import { ChatScreen } from './components/ChatScreen';
 import { Gallery } from './components/Gallery';
 import { ImageViewer } from './components/ImageViewer';
-import { Toast, ToastMessage, ToastType } from './components/Toast';
+import type { ToastMessage, ToastType } from './components/Toast';
+import { Toast } from './components/Toast';
 import { upscaleImage } from './services/veniceService';
 import { compressImage } from './utils';
 import { Palette, MessageSquare, Settings as SettingsIcon, LogOut, Layers, Code } from 'lucide-react';

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GalleryItem } from '../types';
+import type { GalleryItem } from '../types';
 import { Button } from './Button';
 import { Download, Trash2, Wand2, X, Copy, Check, Maximize2, Minimize2 } from 'lucide-react';
 import { ProgressBar } from './ProgressBar';

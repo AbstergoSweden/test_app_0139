@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { SYSTEM_PROMPT_GEMINI } from "../constants";
-import { GenerationParams } from "../types";
+import type { GenerationParams } from "../types";
 
 let ai: GoogleGenAI | null = null;
 let currentKey: string | null = null;

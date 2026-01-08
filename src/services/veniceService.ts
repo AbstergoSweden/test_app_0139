@@ -1,5 +1,5 @@
 import { CONFIG } from '../constants';
-import { Model, GenerationParams, VeniceResponse, EnhancementParams } from '../types';
+import type { Model, GenerationParams, VeniceResponse, EnhancementParams } from '../types';
 
 const MOCK_IMAGE = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 

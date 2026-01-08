@@ -1,5 +1,5 @@
 import { CONFIG } from "../constants";
-import { GalleryItem } from "../types";
+import type { GalleryItem } from "../types";
 
 // Mock User interface as we are removing firebase/auth dependency
 export interface User {

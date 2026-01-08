@@ -38,7 +38,7 @@
 - Ensure builds pass and linting (if added) is clean before requesting review.
 
 ## Security & Configuration Tips
-- API keys can be set in the UI or via `.env` (`VITE_VENICE_API_KEY`, `VITE_GEMINI_API_KEY`).
+- API keys can be set in the UI or via `.env` (`VENICE_API_KEY`, `GEMINI_API_KEY`).
 - User data is intended to stay client-side and encrypted; avoid adding server-side storage.
 - AI integration: `@google/genai` for chat/logic and Venice.ai REST calls for image generation.
 - Persistence: local React state + browser `localStorage`.

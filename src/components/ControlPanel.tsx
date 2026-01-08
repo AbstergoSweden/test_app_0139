@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from './Button';
-import { Model, GenerationParams } from '../types';
+import type { Model, GenerationParams } from '../types';
 import { fetchModels, fetchStyles, suggestPromptVenice, enhancePromptVenice } from '../services/veniceService';
 import { suggestPrompt as suggestPromptGemini, enhancePrompt as enhancePromptGemini } from '../services/geminiService';
 import { CONFIG } from '../constants';

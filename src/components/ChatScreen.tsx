@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { AppSettings, ChatSession, ChatMessage, Model } from '../types';
+import type { AppSettings, ChatSession, ChatMessage, Model } from '../types';
 import { Button } from './Button';
 import { Send, Bot, User as UserIcon, PlusCircle, Trash2, Globe, BrainCircuit, Paperclip, X } from 'lucide-react';
 
