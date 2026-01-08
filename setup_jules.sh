@@ -1,311 +1,368 @@
 #!/usr/bin/env bash
-#
-# ╔═══════════════════════════════════════════════════════════════════════════╗
-# ║                    Venice.ai Image Studio Pro                             ║
-# ║                      Jules Setup Script v1.0                              ║
-# ╚═══════════════════════════════════════════════════════════════════════════╝
-#
-# This script sets up the development environment and guides through
-# fixing known issues in priority order.
-#
-# Usage:
-#   chmod +x setup_jules.sh
-#   ./setup_jules.sh
-#
-# Options:
-#   --skip-checks    Skip environment verification
-#   --fix-issues     Run automated issue fixes
-#   --help           Show this help message
-#
+# Venice.ai Image Studio Pro - Development Setup
+# - Reproducible installs: prefers `npm ci` when package-lock.json exists
+# - Clear diagnostics: shows dirty working tree files if verification fails
+# - Optional flags:
+#     --skip-checks   : skip node/npm version checks
+#     --fix-issues    : print fix instructions at end
+#     --no-git-clean  : do NOT fail if git working tree is dirty (inform only)
 
-set -e
+set -euo pipefail
 
-# Colors for output
+# -----------------------------
+# Colors / formatting
+# -----------------------------
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 BOLD='\033[1m'
 
-# Logging functions
-log_info() { echo -e "${BLUE}ℹ${NC} $1"; }
-log_success() { echo -e "${GREEN}✓${NC} $1"; }
-log_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
-log_error() { echo -e "${RED}✗${NC} $1"; }
-log_step() { echo -e "\n${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"; echo -e "${BOLD}$1${NC}"; }
+# -----------------------------
+# Globals (flags)
+# -----------------------------
+SKIP_CHECKS=false
+FIX_ISSUES=false
+ENFORCE_GIT_CLEAN=true
 
-# Banner
+# -----------------------------
+# Logging helpers
+# -----------------------------
 print_banner() {
-    echo -e "${CYAN}"
-    echo "╔═══════════════════════════════════════════════════════════════════╗"
-    echo "║                                                                   ║"
-    echo "║     🎨  Venice.ai Image Studio Pro - Development Setup  🎨       ║"
-    echo "║                                                                   ║"
-    echo "╚═══════════════════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
+  echo -e "${CYAN}"
+  echo "╔═══════════════════════════════════════════════════════════════════╗"
+  echo "║                                                                   ║"
+  echo "║     🎨  Venice.ai Image Studio Pro - Development Setup  🎨        ║"
+  echo "║                                                                   ║"
+  echo "╚═══════════════════════════════════════════════════════════════════╝"
+  echo -e "${NC}"
 }
 
-# Check if command exists
+log_divider() {
+  echo -e "\n${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+}
+
+log_step() {
+  log_divider
+  echo -e "${BOLD}$1${NC}"
+}
+
+log_info() {
+  echo -e "${BLUE}ℹ${NC} $1"
+}
+
+log_success() {
+  echo -e "${GREEN}✓${NC} $1"
+}
+
+log_warning() {
+  echo -e "${YELLOW}${BOLD}⚠${NC} $1"
+}
+
+log_error() {
+  echo -e "${RED}✖${NC} $1"
+}
+
+# -----------------------------
+# Utility helpers
+# -----------------------------
 command_exists() {
-    command -v "$1" >/dev/null 2>&1
+  command -v "$1" >/dev/null 2>&1
 }
 
-# Verify Node.js version
+require_repo_root() {
+  if [[ ! -f package.json ]]; then
+    log_error "package.json not found. Run this script from the repo root."
+    exit 1
+  fi
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --skip-checks)
+        SKIP_CHECKS=true
+        shift
+        ;;
+      --fix-issues)
+        FIX_ISSUES=true
+        shift
+        ;;
+      --no-git-clean)
+        ENFORCE_GIT_CLEAN=false
+        shift
+        ;;
+      -h|--help)
+        cat <<'EOF'
+Usage: ./setup_jules.sh [options]
+
+Options:
+  --skip-checks     Skip Node/npm version checks
+  --fix-issues      Print fix instructions at end
+  --no-git-clean    Do not fail if git working tree is dirty (inform only)
+  -h, --help        Show help
+EOF
+        exit 0
+        ;;
+      *)
+        log_warning "Unknown option: $1"
+        shift
+        ;;
+    esac
+  done
+}
+
+# -----------------------------
+# Steps
+# -----------------------------
 check_node() {
-    log_step "Step 1: Checking Node.js"
-    
-    if ! command_exists node; then
-        log_error "Node.js is not installed!"
-        log_info "Install Node.js 18+ from https://nodejs.org"
-        exit 1
-    fi
-    
-    NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
-    if [ "$NODE_VERSION" -lt 18 ]; then
-        log_error "Node.js version 18+ required (found: $(node -v))"
-        exit 1
-    fi
-    
-    log_success "Node.js $(node -v) detected"
+  log_step "Step 1: Checking Node.js"
+
+  if [[ "$SKIP_CHECKS" == "true" ]]; then
+    log_warning "Skipping Node/npm checks (--skip-checks)."
+    return 0
+  fi
+
+  if ! command_exists node; then
+    log_error "Node.js not found. Install Node.js >= 18."
+    exit 1
+  fi
+
+  local node_major
+  node_major="$(node -v | sed 's/^v//' | cut -d. -f1)"
+
+  if [[ "$node_major" -lt 18 ]]; then
+    log_error "Node.js v18+ required. Detected: $(node -v)"
+    exit 1
+  fi
+
+  log_success "Node.js $(node -v) detected"
+
+  check_npm
 }
 
-# Verify npm
 check_npm() {
-    if ! command_exists npm; then
-        log_error "npm is not installed!"
-        exit 1
-    fi
-    log_success "npm $(npm -v) detected"
+  if ! command_exists npm; then
+    log_error "npm not found. Install npm."
+    exit 1
+  fi
+  log_success "npm $(npm -v) detected"
 }
 
-# Install dependencies
 install_dependencies() {
-    log_step "Step 2: Installing Dependencies"
-    
-    if [ -d "node_modules" ]; then
-        log_info "node_modules exists, checking for updates..."
-        npm install --prefer-offline 2>/dev/null || npm install
-    else
-        log_info "Installing fresh dependencies..."
-        npm install
-    fi
-    
-    log_success "Dependencies installed"
+  log_step "Step 2: Installing Dependencies"
+
+  if [[ -d node_modules ]]; then
+    log_info "node_modules exists. Installing may still update dependencies if lockfile changed."
+  else
+    log_info "Installing fresh dependencies..."
+  fi
+
+  # Critical change: prefer npm ci to avoid rewriting package-lock.json in CI/bots.
+  if [[ -f package-lock.json ]]; then
+    log_info "package-lock.json detected → using ${BOLD}npm ci${NC} (reproducible, no lockfile rewrite)."
+    npm ci
+  else
+    log_warning "No package-lock.json found → using npm install."
+    npm install
+  fi
+
+  log_success "Dependencies installed"
 }
 
-# Setup environment
 setup_environment() {
-    log_step "Step 3: Environment Configuration"
-    
-    if [ ! -f ".env.local" ]; then
-        if [ -f ".env.example" ]; then
-            cp .env.example .env.local
-            log_success "Created .env.local from template"
-            log_warning "Edit .env.local to add your API keys"
-        else
-            log_warning "No .env.example found, creating empty .env.local"
-            touch .env.local
-        fi
+  log_step "Step 3: Environment Configuration"
+
+  if [[ ! -f .env.local ]]; then
+    if [[ -f .env.example ]]; then
+      cp .env.example .env.local
+      log_success "Created .env.local from template"
+      log_warning "Edit .env.local to add your API keys"
     else
-        log_success ".env.local already exists"
+      log_warning "No .env.example found; skipping .env.local creation"
     fi
+  else
+    log_success ".env.local already exists"
+  fi
 }
 
-# Install Playwright browsers
 setup_playwright() {
-    log_step "Step 4: Setting up E2E Testing (Playwright)"
-    
-    log_info "Installing Playwright browsers..."
-    npx playwright install chromium --with-deps 2>/dev/null || {
-        log_warning "Could not install Playwright dependencies (may need sudo)"
-        log_info "Run manually: npx playwright install chromium"
-    }
-    
-    log_success "Playwright setup complete"
+  log_step "Step 4: Setting up E2E Testing (Playwright)"
+
+  if [[ ! -f package.json ]]; then
+    log_warning "package.json missing; skipping Playwright setup"
+    return 0
+  fi
+
+  # Only try if playwright is present in deps; avoid failing on repos without it.
+  if ! node -e "process.exit(require('./package.json')?.devDependencies?.playwright || require('./package.json')?.dependencies?.playwright ? 0 : 1)" >/dev/null 2>&1; then
+    log_info "Playwright not detected in dependencies; skipping browser install."
+    return 0
+  fi
+
+  log_info "Installing Playwright browsers..."
+  # In containers, --with-deps is useful; locally it is fine too.
+  npx playwright install chromium --with-deps
+  log_success "Playwright setup complete"
 }
 
-# Run verification
 run_verification() {
-    log_step "Step 5: Running Verification"
-    
-    log_info "Running TypeScript check..."
-    npm run typecheck || {
-        log_error "TypeScript errors found!"
-        return 1
-    }
-    log_success "TypeScript check passed"
-    
-    log_info "Running linter..."
-    npm run lint 2>/dev/null && log_success "Lint passed" || log_warning "Lint has warnings (non-blocking)"
-    
-    log_info "Running unit tests..."
-    npm run test || {
-        log_error "Tests failed!"
-        return 1
-    }
-    log_success "All tests passed"
-    
-    log_info "Running build..."
-    npm run build || {
-        log_error "Build failed!"
-        return 1
-    }
-    log_success "Build successful"
+  log_step "Step 5: Running Verification"
+
+  log_info "Running TypeScript check..."
+  npm run typecheck
+  log_success "TypeScript check passed"
+
+  log_info "Running linter..."
+  npm run lint
+  log_success "Lint passed"
+
+  log_info "Running unit tests..."
+  npm run test
+  log_success "All tests passed"
+
+  log_info "Running build..."
+  npm run build
+  log_success "Build successful"
 }
 
-# Print issue priority list
 print_issue_list() {
-    log_step "Known Issues (Priority Order)"
-    
-    echo -e "
-${BOLD}Priority 1 - Quick Wins (< 1 hour each):${NC}
-${GREEN}[DONE]${NC} 1. Gallery UI flicker on load
-${GREEN}[DONE]${NC} 2. Password strength enforcement
-${GREEN}[DONE]${NC} 3. Environment variable documentation
-${GREEN}[DONE]${NC} 4. PWA service worker setup
-${GREEN}[DONE]${NC} 5. Gallery pagination for large collections
+  log_step "Known Issues (Priority Order)"
 
-${BOLD}Priority 2 - Medium Effort (1-4 hours each):${NC}
-${GREEN}[DONE]${NC} 6. Data migration for old user formats
-${GREEN}[DONE]${NC} 7. Optimistic updates for image generation
-${GREEN}[DONE]${NC} 8. E2E test framework setup
-${YELLOW}[TODO]${NC} 9. Fix remaining \`any\` type warnings (25 warnings)
-${YELLOW}[TODO]${NC} 10. Fix React hooks dependency warnings (2 warnings)
+  cat <<'EOF'
 
-${BOLD}Priority 3 - Larger Refactors (4+ hours):${NC}
-${YELLOW}[TODO]${NC} 11. Code splitting to reduce bundle size (~1.3MB)
-${YELLOW}[TODO]${NC} 12. State management refactor (Zustand/Jotai)
-${YELLOW}[TODO]${NC} 13. Full TypeScript strict mode compliance
+Priority 1 - Quick Wins (< 1 hour each):
+[DONE] 1. Gallery UI flicker on load
+[DONE] 2. Password strength enforcement
+[DONE] 3. Environment variable documentation
+[DONE] 4. PWA service worker setup
+[DONE] 5. Gallery pagination for large collections
 
-${BOLD}Priority 4 - Nice to Have:${NC}
-${YELLOW}[TODO]${NC} 14. Cloud sync option (encrypted)
-${YELLOW}[TODO]${NC} 15. Additional AI model integrations
-${YELLOW}[TODO]${NC} 16. Mobile app version
-"
+Priority 2 - Medium Effort (1-4 hours each):
+[DONE] 6. Data migration for old user formats
+[DONE] 7. Optimistic updates for image generation
+[DONE] 8. E2E test framework setup
+[TODO] 9. Fix remaining `any` type warnings (25 warnings)
+[TODO] 10. Fix React hooks dependency warnings (2 warnings)
+
+Priority 3 - Larger Refactors (4+ hours):
+[TODO] 11. Code splitting to reduce bundle size (~1.3MB)
+[TODO] 12. State management refactor (Zustand/Jotai)
+[TODO] 13. Full TypeScript strict mode compliance
+
+Priority 4 - Nice to Have:
+[TODO] 14. Cloud sync option (encrypted)
+[TODO] 15. Additional AI model integrations
+[TODO] 16. Mobile app version
+
+EOF
 }
 
-# Provide fix commands
-print_fix_commands() {
-    log_step "Fix Commands for Remaining Issues"
-    
-    echo -e "
-${BOLD}Issue 9: Fix \`any\` type warnings${NC}
-Files affected:
-  - src/services/geminiService.ts (8 warnings)
-  - src/services/veniceService.ts (7 warnings)
-  - src/components/ControlPanel.tsx (3 warnings)
-  - src/App.tsx (2 warnings)
-  - Others (5 warnings)
+print_fix_instructions() {
+  cat <<'EOF'
+Fix instructions:
 
-Strategy: Replace \`any\` with proper types or \`unknown\`:
-${CYAN}# View all any warnings:
-npm run lint 2>&1 | grep 'no-explicit-any'
+A) Fix "working tree dirty due to package-lock.json"
+   - Preferred: use `npm ci` instead of `npm install` in CI/bot setup scripts.
+   - If lockfile and package.json are out of sync:
+       npm install
+       git add package-lock.json
+       git commit -m "chore: update package-lock"
 
-# For API responses, create proper types in src/types/
-# For error catches, use: catch (e: unknown)${NC}
+B) Fix React hooks exhaustive-deps warnings
+   - Ensure all values referenced in useEffect are included in dependency arrays
+   - Or refactor to use useMemo/useCallback where appropriate
 
----
-
-${BOLD}Issue 10: Fix React hooks dependency warnings${NC}
-Files: AuthScreen.tsx, ControlPanel.tsx
-
-${CYAN}# Option A: Add missing dependencies
-useEffect(() => { ... }, [knownUsers]);
-
-# Option B: Wrap value in useMemo if intentionally static
-const knownUsers = useMemo(() => getRegisteredUsers(), []);${NC}
-
----
-
-${BOLD}Issue 11: Code splitting${NC}
-${CYAN}# Add dynamic imports for heavy components
-const Gallery = lazy(() => import('./components/Gallery'));
-
-# Configure Rollup chunks in vite.config.ts
-build: {
-  rollupOptions: {
-    output: {
-      manualChunks: {
-        vendor: ['react', 'react-dom'],
-        ai: ['@google/genai', 'firebase'],
-      }
-    }
-  }
-}${NC}
-
----
-
-${BOLD}Issue 12: State management${NC}
-${CYAN}# Install Zustand
-npm install zustand
-
-# Create store in src/store/useAppStore.ts
-# Migrate useState from App.tsx to store${NC}
-"
+C) Fix @typescript-eslint/no-explicit-any warnings
+   - Introduce typed interfaces for API responses and local state
+   - Use unknown + type guards where runtime validation is needed
+EOF
 }
 
-# Main execution
+verify_clean_worktree() {
+  # Only relevant if we're inside a git repo.
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    log_info "Not a git repository; skipping git clean check."
+    return 0
+  fi
+
+  # Show branch info (matches your earlier output vibe)
+  local branch
+  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  [[ -n "$branch" ]] && log_info "On branch ${branch}"
+
+  # Dirty if either unstaged or staged diffs exist.
+  local dirty=false
+  if ! git diff --quiet; then dirty=true; fi
+  if ! git diff --cached --quiet; then dirty=true; fi
+
+  if [[ "$dirty" == "true" ]]; then
+    if [[ "$ENFORCE_GIT_CLEAN" == "true" ]]; then
+      log_error "Working tree is dirty."
+      echo
+      echo "Git status (porcelain):"
+      git status --porcelain || true
+      echo
+      log_error "Verification of Environment failed: working tree must be clean."
+      log_info "Tip: If the only change is package-lock.json, use 'npm ci' instead of 'npm install'."
+      exit 1
+    else
+      log_warning "Working tree is dirty (continuing due to --no-git-clean)."
+      echo
+      echo "Git status (porcelain):"
+      git status --porcelain || true
+      echo
+      return 0
+    fi
+  fi
+
+  log_success "Working tree is clean"
+}
+
+print_done() {
+  log_step "Setup Complete! 🎉"
+  cat <<'EOF'
+
+Next Steps:
+  1. Edit .env.local with your API keys
+  2. Run npm run dev to start development
+  3. Open http://localhost:3000
+
+Useful Commands:
+  npm run dev        - Start dev server
+  npm run preflight  - Run all checks before committing
+  npm run test:e2e   - Run E2E tests
+  ./setup_jules.sh --fix-issues - Show fix instructions
+
+EOF
+}
+
+# -----------------------------
+# Main
+# -----------------------------
 main() {
-    print_banner
-    
-    # Parse arguments
-    SKIP_CHECKS=false
-    FIX_ISSUES=false
-    
-    for arg in "$@"; do
-        case $arg in
-            --skip-checks)
-                SKIP_CHECKS=true
-                ;;
-            --fix-issues)
-                FIX_ISSUES=true
-                ;;
-            --help)
-                echo "Usage: ./setup_jules.sh [OPTIONS]"
-                echo ""
-                echo "Options:"
-                echo "  --skip-checks    Skip environment verification"
-                echo "  --fix-issues     Show detailed fix instructions"
-                echo "  --help           Show this help message"
-                exit 0
-                ;;
-        esac
-    done
-    
-    if [ "$SKIP_CHECKS" = false ]; then
-        check_node
-        check_npm
-        install_dependencies
-        setup_environment
-        setup_playwright
-        run_verification
-    fi
-    
-    print_issue_list
-    
-    if [ "$FIX_ISSUES" = true ]; then
-        print_fix_commands
-    fi
-    
-    log_step "Setup Complete! 🎉"
-    
-    echo -e "
-${GREEN}${BOLD}Next Steps:${NC}
-  1. Edit ${CYAN}.env.local${NC} with your API keys
-  2. Run ${CYAN}npm run dev${NC} to start development
-  3. Open ${CYAN}http://localhost:3000${NC}
+  parse_args "$@"
+  print_banner
+  require_repo_root
 
-${BOLD}Useful Commands:${NC}
-  ${CYAN}npm run dev${NC}        - Start dev server
-  ${CYAN}npm run preflight${NC}  - Run all checks before committing
-  ${CYAN}npm run test:e2e${NC}   - Run E2E tests
-  ${CYAN}./setup_jules.sh --fix-issues${NC} - Show fix instructions
+  check_node
+  install_dependencies
+  setup_environment
+  setup_playwright
+  run_verification
+  print_issue_list
 
-${PURPLE}Happy coding! 🚀${NC}
-"
+  if [[ "$FIX_ISSUES" == "true" ]]; then
+    print_fix_instructions
+  fi
+
+  print_done
+
+  # Do this last so you still get the full output context before failing.
+  verify_clean_worktree
 }
 
 main "$@"
