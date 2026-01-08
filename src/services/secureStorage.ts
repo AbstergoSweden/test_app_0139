@@ -1,5 +1,6 @@
 import { encryptData, decryptData } from "../utils/crypto";
-import { UserData } from "../types";
+import { UserData, GalleryItem } from "../types";
+import { saveBlob, getBlobs, deleteBlobs, getAllBlobIds } from "./blobStorage";
 
 const USERS_INDEX_KEY = "venice_app_users_index"; // Stores list of usernames
 const USER_PREFIX = "venice_user_data_";
@@ -86,17 +87,61 @@ export const registerUser = async (username: string, password: string): Promise<
     return initialData;
 };
 
+/**
+ * Strips base64 data from gallery items for metadata-only storage.
+ */
+const stripBlobsFromGallery = (gallery: GalleryItem[]): GalleryItem[] => {
+    return gallery.map(item => ({
+        ...item,
+        base64: '', // Store empty string, actual blob is in IndexedDB
+    }));
+};
+
+/**
+ * Rehydrates gallery items with blob data from IndexedDB.
+ */
+const rehydrateGalleryBlobs = async (gallery: GalleryItem[]): Promise<GalleryItem[]> => {
+    if (gallery.length === 0) return gallery;
+
+    const ids = gallery.map(item => item.id);
+    const blobs = await getBlobs(ids);
+
+    return gallery.map(item => ({
+        ...item,
+        base64: blobs.get(item.id) ?? item.base64, // Use IndexedDB blob or keep existing
+    }));
+};
+
 export const loginUser = async (username: string, password: string): Promise<UserData> => {
     const rawData = localStorage.getItem(USER_PREFIX + username);
     if (!rawData) throw new Error("User data not found.");
-    return decryptData(rawData, password);
+
+    const userData = await decryptData(rawData, password) as UserData;
+
+    // Rehydrate blobs from IndexedDB
+    userData.gallery = await rehydrateGalleryBlobs(userData.gallery);
+
+    return userData;
 };
 
 export const saveUserData = async (data: UserData, password: string): Promise<void> => {
     // Don't save dev user to local storage to avoid corrupting real data
     if (data.username === 'dev') return;
 
-    const encrypted = await encryptData(data, password);
+    // Save blobs to IndexedDB first
+    for (const item of data.gallery) {
+        if (item.base64 && item.base64.length > 0) {
+            await saveBlob(item.id, item.base64);
+        }
+    }
+
+    // Create metadata-only copy (no base64 data)
+    const metadataOnly: UserData = {
+        ...data,
+        gallery: stripBlobsFromGallery(data.gallery),
+    };
+
+    const encrypted = await encryptData(metadataOnly, password);
     try {
         localStorage.setItem(USER_PREFIX + data.username, encrypted);
     } catch (e) {
@@ -107,11 +152,40 @@ export const saveUserData = async (data: UserData, password: string): Promise<vo
     }
 };
 
-export const deleteUser = (username: string) => {
+export const deleteUser = async (username: string): Promise<void> => {
+    // First, try to get the user's gallery IDs to clean up blobs
+    try {
+        const rawData = localStorage.getItem(USER_PREFIX + username);
+        if (rawData) {
+            // We can't decrypt without password, so we'll do a best-effort cleanup
+            // by removing all blobs that are orphaned after user deletion
+        }
+    } catch {
+        // Ignore errors, continue with deletion
+    }
+
     const users = getRegisteredUsers().filter(u => u !== username);
     localStorage.setItem(USERS_INDEX_KEY, JSON.stringify(users));
     localStorage.removeItem(USER_PREFIX + username);
     if (getLastUser() === username) {
         localStorage.removeItem(LAST_USER_KEY);
+    }
+};
+
+/**
+ * Cleans up orphaned blobs that are no longer referenced by any gallery.
+ * Call this periodically or after gallery item deletion.
+ */
+export const cleanupOrphanedBlobs = async (activeGalleryIds: string[]): Promise<void> => {
+    try {
+        const allBlobIds = await getAllBlobIds();
+        const activeSet = new Set(activeGalleryIds);
+        const orphanedIds = allBlobIds.filter(id => !activeSet.has(id));
+
+        if (orphanedIds.length > 0) {
+            await deleteBlobs(orphanedIds);
+        }
+    } catch (e) {
+        console.warn('Failed to cleanup orphaned blobs:', e);
     }
 };

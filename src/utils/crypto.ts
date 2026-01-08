@@ -1,12 +1,114 @@
+import type { CryptoWorkerRequest, CryptoWorkerResponse, CryptoWorkerErrorResponse } from '../types/crypto';
+
 // Configurable Security Parameters
 const ITERATIONS_NEW = 310000;
 const SALT_SIZE_NEW = 64;
 const ITERATIONS_LEGACY = 100000;
 const SALT_SIZE_LEGACY = 16;
 
-// Derive an AES‑GCM key from a password. Use OWASP‑recommended parameters (≥310 000 iterations
-// and a 64‑byte salt) to slow down brute‑force attacks.
-export const deriveKey = async (password: string, salt: Uint8Array, iterations: number = ITERATIONS_NEW): Promise<CryptoKey> => {
+// Web Worker instance (lazily initialized)
+let cryptoWorker: Worker | null = null;
+let workerSupported = true;
+let requestIdCounter = 0;
+const pendingRequests = new Map<string, {
+    resolve: (key: CryptoKey) => void;
+    reject: (error: Error) => void;
+}>();
+
+/**
+ * Initializes the crypto Web Worker if available.
+ */
+const getCryptoWorker = (): Worker | null => {
+    if (!workerSupported) return null;
+
+    if (!cryptoWorker) {
+        try {
+            // Vite handles ?worker imports
+            cryptoWorker = new Worker(
+                new URL('../workers/crypto.worker.ts', import.meta.url),
+                { type: 'module' }
+            );
+
+            cryptoWorker.onmessage = async (e: MessageEvent<CryptoWorkerResponse>) => {
+                const response = e.data;
+                const pending = pendingRequests.get(response.id);
+                if (!pending) return;
+
+                pendingRequests.delete(response.id);
+
+                if (response.success) {
+                    try {
+                        // Import the raw key bytes back as a CryptoKey
+                        const key = await window.crypto.subtle.importKey(
+                            'raw',
+                            response.keyData,
+                            { name: 'AES-GCM', length: 256 },
+                            true,
+                            ['encrypt', 'decrypt']
+                        );
+                        pending.resolve(key);
+                    } catch {
+                        pending.reject(new Error('Failed to import derived key'));
+                    }
+                } else {
+                    const errorResponse = response as CryptoWorkerErrorResponse;
+                    pending.reject(new Error(errorResponse.error));
+                }
+            };
+
+            cryptoWorker.onerror = () => {
+                // Worker failed, fall back to main thread
+                workerSupported = false;
+                cryptoWorker?.terminate();
+                cryptoWorker = null;
+            };
+        } catch {
+            workerSupported = false;
+            return null;
+        }
+    }
+
+    return cryptoWorker;
+};
+
+/**
+ * Derives key using Web Worker (off main thread).
+ */
+const deriveKeyViaWorker = (password: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> => {
+    return new Promise((resolve, reject) => {
+        const worker = getCryptoWorker();
+        if (!worker) {
+            reject(new Error('Worker not available'));
+            return;
+        }
+
+        const id = `req_${++requestIdCounter}`;
+        pendingRequests.set(id, { resolve, reject });
+
+        const request: CryptoWorkerRequest = {
+            id,
+            type: 'deriveKey',
+            password,
+            salt,
+            iterations,
+        };
+
+        worker.postMessage(request);
+
+        // Timeout after 30 seconds (should be plenty for 310k iterations)
+        setTimeout(() => {
+            if (pendingRequests.has(id)) {
+                pendingRequests.delete(id);
+                reject(new Error('Worker timed out'));
+            }
+        }, 30000);
+    });
+};
+
+/**
+ * Derives key on main thread (fallback).
+ */
+const deriveKeyMainThread = async (password: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> => {
     const enc = new TextEncoder();
     const keyMaterial = await window.crypto.subtle.importKey(
         "raw",
@@ -29,7 +131,25 @@ export const deriveKey = async (password: string, salt: Uint8Array, iterations: 
     );
 };
 
-export const encryptData = async (data: any, password: string): Promise<string> => {
+/**
+ * Derive an AES‑GCM key from a password. Use OWASP‑recommended parameters (≥310 000 iterations
+ * and a 64‑byte salt) to slow down brute‑force attacks.
+ * 
+ * Automatically uses Web Worker for off-thread processing when available.
+ */
+export const deriveKey = async (password: string, salt: Uint8Array, iterations: number = ITERATIONS_NEW): Promise<CryptoKey> => {
+    // Try worker first for high iteration counts
+    if (iterations >= 100000) {
+        try {
+            return await deriveKeyViaWorker(password, salt, iterations);
+        } catch {
+            // Fall back to main thread
+        }
+    }
+    return deriveKeyMainThread(password, salt, iterations);
+};
+
+export const encryptData = async (data: unknown, password: string): Promise<string> => {
     // Use a 64‑byte salt as per OWASP recommendations.
     const salt = window.crypto.getRandomValues(new Uint8Array(SALT_SIZE_NEW));
     const iv = window.crypto.getRandomValues(new Uint8Array(12));
@@ -64,7 +184,7 @@ export const encryptData = async (data: any, password: string): Promise<string> 
     return btoa(binary);
 };
 
-export const decryptData = async (encryptedBase64: string, password: string): Promise<any> => {
+export const decryptData = async (encryptedBase64: string, password: string): Promise<unknown> => {
     try {
         const binaryString = atob(encryptedBase64);
         const buffer = new Uint8Array(binaryString.length);
