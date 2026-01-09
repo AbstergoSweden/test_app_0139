@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <img src="https://via.placeholder.com/800x400/0f172a/60a5fa?text=Venice.ai+Image+Studio+Pro" alt="App Screenshot" />
+  <img width="1536" height="1024" alt="483854870-514bd1e1-6ef5-4403-8d0a-441881c5217e" src="https://github.com/user-attachments/assets/cf3a29e9-de2b-4465-8b76-41c1142eb617" />
 </p>
 
 ---
