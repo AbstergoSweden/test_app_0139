@@ -1,5 +1,13 @@
 import { CONFIG } from "../constants";
-import type { GalleryItem } from "../types";
+import type { GalleryItem, GenerationParams } from "../types";
+
+// Flattened params update (e.g., { 'params.enhanced': true })
+type FlattenedParamsUpdate = {
+    [K in keyof GenerationParams as `params.${K & string}`]?: GenerationParams[K];
+};
+
+// Type for updates: either direct properties or flattened params notation
+type GalleryItemUpdate = Partial<Omit<GalleryItem, 'params'>> & FlattenedParamsUpdate;
 
 // Mock User interface as we are removing firebase/auth dependency
 export interface User {
@@ -54,27 +62,33 @@ export const saveImageToHistory = async (userId: string, item: Omit<GalleryItem,
     return newItem;
 };
 
-export const updateImageInHistory = async (userId: string, docId: string, updates: any) => {
+export const updateImageInHistory = async (_userId: string, docId: string, updates: GalleryItemUpdate) => {
     const items = getLocalHistory();
     const index = items.findIndex(i => i.id === docId);
     if (index !== -1) {
         const currentItem = items[index];
 
-        // Handle flattened dot notation updates manually if needed, 
-        // or expect the caller to pass nested objects. 
-        // For 'params.enhanced' style keys:
+        // Handle flattened dot notation updates (e.g., 'params.enhanced')
+        // and direct property updates separately
         const newParams = { ...currentItem.params };
-        const cleanUpdates = { ...updates };
+        const cleanUpdates: Partial<Omit<GalleryItem, 'params'>> = {};
 
-        Object.keys(updates).forEach(key => {
+        for (const key of Object.keys(updates)) {
             if (key.startsWith('params.')) {
-                const paramKey = key.split('.')[1];
-                // Cast to any to avoid "Type 'any' is not assignable to type 'never'" error
-                // because GenerationParams has mixed value types (string | number | boolean).
-                (newParams as any)[paramKey] = updates[key];
-                delete cleanUpdates[key];
+                const paramKey = key.slice(7) as keyof GenerationParams; // Remove 'params.' prefix
+                const value = updates[key as keyof FlattenedParamsUpdate];
+                if (value !== undefined) {
+                    // Use type-safe assignment by checking the specific param key
+                    Object.assign(newParams, { [paramKey]: value });
+                }
+            } else {
+                // Direct property update (id, base64, createdAt, mediaType)
+                const value = updates[key as keyof typeof cleanUpdates];
+                if (value !== undefined) {
+                    Object.assign(cleanUpdates, { [key]: value });
+                }
             }
-        });
+        }
 
         items[index] = {
             ...currentItem,

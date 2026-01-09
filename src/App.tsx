@@ -157,12 +157,13 @@ export default function App() {
                 }, 500);
             };
             reader.readAsDataURL(resultBlob);
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error(e);
             if (progressInterval.current) clearInterval(progressInterval.current);
             setIsEnhancing(false);
             setEnhanceProgress(0);
-            addToast(e.message || "Enhancement failed. Check API key.", "error");
+            const message = e instanceof Error ? e.message : "Enhancement failed. Check API key.";
+            addToast(message, "error");
         }
     };
 
@@ -303,7 +304,15 @@ export default function App() {
 }
 
 // Helper Nav Component
-const NavButton = ({ active, onClick, icon, label, variant = 'default' }: any) => (
+interface NavButtonProps {
+    active: boolean;
+    onClick: () => void;
+    icon: React.ReactNode;
+    label: string;
+    variant?: 'default' | 'danger';
+}
+
+const NavButton = ({ active, onClick, icon, label, variant = 'default' }: NavButtonProps) => (
     <button
         onClick={onClick}
         className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200

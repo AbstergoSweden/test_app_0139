@@ -162,8 +162,9 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ settings, chats, onUpdat
                 return c;
             }));
 
-        } catch (error: any) {
-            const errorMsg: ChatMessage = { role: 'model', content: "Error: " + error.message, timestamp: Date.now() };
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Unknown error occurred";
+            const errorMsg: ChatMessage = { role: 'model', content: "Error: " + message, timestamp: Date.now() };
             onUpdateChats(chats.map(c =>
                 c.id === activeChatId
                     ? { ...c, messages: [...c.messages, errorMsg] }

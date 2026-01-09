@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
+import type { Part, GroundingChunk, GenerateContentConfig, GenerateVideosConfig } from "@google/genai";
 import { SYSTEM_PROMPT_GEMINI } from "../constants";
-import type { GenerationParams } from "../types";
+import type { GenerationParams, ChatMessage } from "../types";
 
 let ai: GoogleGenAI | null = null;
 let currentKey: string | null = null;
@@ -79,7 +80,7 @@ export const generateGeminiImage = async (params: GenerationParams, apiKey: stri
     // "gemini-2.5-flash-image" for standard
     const model = params.geminiConfig?.imageSize ? "gemini-3-pro-image-preview" : "gemini-2.5-flash-image";
 
-    const config: any = {
+    const config: GenerateContentConfig = {
         imageConfig: {
             aspectRatio: params.aspectRatio || "1:1",
         }
@@ -87,7 +88,10 @@ export const generateGeminiImage = async (params: GenerationParams, apiKey: stri
 
     // Only Pro model supports imageSize
     if (params.geminiConfig?.imageSize && model === "gemini-3-pro-image-preview") {
-        config.imageConfig.imageSize = params.geminiConfig.imageSize;
+        config.imageConfig = {
+            ...config.imageConfig,
+            imageSize: params.geminiConfig.imageSize
+        };
     }
 
     const response = await client.models.generateContent({
@@ -126,7 +130,7 @@ export const generateGeminiVideo = async (
     onStatusUpdate?.("Submitting video generation request...");
 
     // Build Request
-    const generateOptions: any = {
+    const generateOptions: GenerateVideosConfig = {
         model: model,
         prompt: params.prompt,
         config: {
@@ -176,7 +180,7 @@ export const generateGeminiVideo = async (
 
 // --- Enhanced Chat (Multimodal + Thinking + Search) ---
 export const generateGeminiChat = async (
-    messages: any[],
+    messages: ChatMessage[],
     apiKey: string,
     systemPrompt?: string,
     config?: { useThinking?: boolean; useSearch?: boolean; thinkingBudget?: number }
@@ -199,7 +203,7 @@ export const generateGeminiChat = async (
     }
 
     // Prepare Config
-    const genConfig: any = {
+    const genConfig: GenerateContentConfig = {
         systemInstruction: systemPrompt
     };
 
@@ -215,7 +219,7 @@ export const generateGeminiChat = async (
     // Prepare Contents
     // We need to convert the chat history into Gemini format, including attachments
     const history = messages.map(msg => {
-        const parts: any[] = [];
+        const parts: Part[] = [];
 
         // Add text part
         if (msg.content) {
@@ -224,7 +228,7 @@ export const generateGeminiChat = async (
 
         // Add attachments
         if (msg.attachments) {
-            msg.attachments.forEach((att: any) => {
+            msg.attachments.forEach((att) => {
                 parts.push({
                     inlineData: {
                         mimeType: att.mimeType,
@@ -252,8 +256,8 @@ export const generateGeminiChat = async (
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks && chunks.length > 0) {
         const links = chunks
-            .filter((c: any) => c.web?.uri)
-            .map((c: any) => `[${c.web.title}](${c.web.uri})`)
+            .filter((c: GroundingChunk) => c.web?.uri)
+            .map((c: GroundingChunk) => `[${c.web?.title ?? 'Source'}](${c.web?.uri})`)
             .join('\n');
 
         if (links) {

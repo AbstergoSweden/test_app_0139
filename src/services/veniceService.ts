@@ -1,7 +1,35 @@
 import { CONFIG } from '../constants';
-import type { Model, GenerationParams, VeniceResponse, EnhancementParams } from '../types';
+import type { Model, GenerationParams, VeniceResponse, EnhancementParams, ChatMessage } from '../types';
 
 const MOCK_IMAGE = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+// Types for Venice API responses
+interface VeniceModelItem {
+    id: string;
+    name?: string;
+}
+
+interface VeniceStyleItem {
+    id: string;
+}
+
+interface VeniceChatResponse {
+    choices: { message: { content: string } }[];
+}
+
+// Type for API request payloads
+interface VeniceImageGeneratePayload {
+    model: string;
+    prompt: string;
+    negative_prompt: string;
+    width: number;
+    height: number;
+    steps: number;
+    hide_watermark: boolean;
+    safe_mode: boolean;
+    seed: number;
+    style_preset?: string;
+}
 
 export const fetchModels = async (type: 'image' | 'text' = 'image', apiKey?: string): Promise<Model[]> => {
     // Dev Mode Mock
@@ -35,7 +63,7 @@ export const fetchModels = async (type: 'image' | 'text' = 'image', apiKey?: str
         const response = await fetch(`${CONFIG.BASE_API_URL}/models?type=${type}`, { headers });
         if (!response.ok) throw new Error(`Failed to fetch ${type} models`);
         const data = await response.json();
-        return data.data.map((item: any) => ({
+        return data.data.map((item: VeniceModelItem | string) => ({
             id: typeof item === 'object' ? item.id : item,
             name: typeof item === 'object' ? item.name || item.id : item
         }));
@@ -64,14 +92,26 @@ export const fetchStyles = async (apiKey?: string): Promise<string[]> => {
         const response = await fetch(`${CONFIG.BASE_API_URL}/image/styles`, { headers });
         if (!response.ok) throw new Error("Failed to fetch styles");
         const data = await response.json();
-        return data.data.map((item: any) => (typeof item === 'object' ? item.id : item));
+        return data.data.map((item: VeniceStyleItem | string) => (typeof item === 'object' ? item.id : item));
     } catch (error) {
         console.error(error);
         return [];
     }
 };
 
-const attemptApiCall = async (url: string, data: any, keyIndex = 0, isBinaryResponse = false, retries = 0, overrideKey?: string): Promise<any> => {
+// Venice API payload types
+type VenicePayload = VeniceImageGeneratePayload | VeniceChatPayload | EnhancementParams;
+
+// Internal interface for chat payload structure
+interface VeniceChatPayload {
+    model: string;
+    messages: { role: string; content: string }[];
+}
+
+// Simplified message type for internal chat functions (only role and content needed)
+type SimpleChatMessage = Pick<ChatMessage, 'role' | 'content'>;
+
+const attemptApiCall = async (url: string, data: VenicePayload, keyIndex = 0, isBinaryResponse = false, retries = 0, overrideKey?: string): Promise<VeniceResponse | VeniceChatResponse | Response> => {
     let apiKey = overrideKey;
     if (!apiKey) {
         if (CONFIG.API_KEYS.length === 0) throw new Error("No Venice API Key configured. Please add your API Key in Settings.");
@@ -98,7 +138,7 @@ const attemptApiCall = async (url: string, data: any, keyIndex = 0, isBinaryResp
         if (url.includes('/image/upscale')) {
             // Mock binary response for upscale
             const res = await fetch(`data:image/png;base64,${MOCK_IMAGE}`);
-            return isBinaryResponse ? res : res.blob();
+            return res;
         }
     }
 
@@ -130,7 +170,7 @@ const attemptApiCall = async (url: string, data: any, keyIndex = 0, isBinaryResp
             throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
         }
         return isBinaryResponse ? response : response.json();
-    } catch (error: any) {
+    } catch (error: unknown) {
         if (!overrideKey && keyIndex + 1 < CONFIG.API_KEYS.length) {
              return attemptApiCall(url, data, keyIndex + 1, isBinaryResponse);
         }
@@ -141,7 +181,7 @@ const attemptApiCall = async (url: string, data: any, keyIndex = 0, isBinaryResp
 export const generateImage = async (params: GenerationParams, apiKey?: string): Promise<VeniceResponse> => {
     // Sanitize parameters to only include what Venice API expects.
     // Explicitly mapping fields prevents sending internal state like 'provider', 'mediaType', 'geminiConfig'.
-    const payload: any = {
+    const payload: VeniceImageGeneratePayload = {
         model: params.model,
         prompt: params.prompt,
         negative_prompt: params.negative_prompt,
@@ -157,11 +197,12 @@ export const generateImage = async (params: GenerationParams, apiKey?: string): 
         payload.style_preset = params.style_preset;
     }
 
-    return attemptApiCall(`${CONFIG.BASE_API_URL}/image/generate`, payload, 0, false, 0, apiKey);
+    const result = await attemptApiCall(`${CONFIG.BASE_API_URL}/image/generate`, payload, 0, false, 0, apiKey);
+    return result as VeniceResponse;
 };
 
-export const generateChatResponse = async (messages: any[], model: string, apiKey: string, systemPrompt?: string): Promise<string> => {
-    const payload = {
+export const generateChatResponse = async (messages: SimpleChatMessage[], model: string, apiKey: string, systemPrompt?: string): Promise<string> => {
+    const payload: VeniceChatPayload = {
         model,
         messages: [
             ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
@@ -169,13 +210,13 @@ export const generateChatResponse = async (messages: any[], model: string, apiKe
         ]
     };
     const result = await attemptApiCall(`${CONFIG.BASE_API_URL}/chat/completions`, payload, 0, false, 0, apiKey);
-    return result.choices[0].message.content;
+    return (result as VeniceChatResponse).choices[0].message.content;
 };
 
 export const upscaleImage = async (params: EnhancementParams, apiKey?: string): Promise<Blob> => {
     // attemptApiCall returns the raw Response object when isBinaryResponse is true
     const response = await attemptApiCall(`${CONFIG.BASE_API_URL}/image/upscale`, params, 0, true, 0, apiKey);
-    return response.blob();
+    return (response as Response).blob();
 };
 
 export const suggestPromptVenice = async (idea: string, apiKey: string): Promise<string> => {
