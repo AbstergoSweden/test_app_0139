@@ -28,11 +28,11 @@ This software integrates with third-party services that are subject to their
 own terms of service:
 
   • Google Gemini API - Subject to the Gemini API Additional Terms of Service
-    (https://ai.google.dev/gemini-api/terms) and the Google APIs Terms of
-    Service (https://developers.google.com/terms).
+    (<https://ai.google.dev/gemini-api/terms>) and the Google APIs Terms of
+    Service (<https://developers.google.com/terms>).
 
   • Venice.ai - Subject to the Venice.ai Terms of Service
-    (https://venice.ai/legal/tos).
+    (<https://venice.ai/legal/tos>).
 
 Users of this software must independently agree to and comply with all
 applicable third-party terms of service. Neither the author of this software
