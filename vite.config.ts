@@ -85,6 +85,18 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(__dirname, './src'),
       }
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom'],
+            'genai': ['@google/genai'],
+            'ui': ['lucide-react'],
+            'utils': ['zxcvbn'],
+          }
+        }
+      }
     }
   };
 });

@@ -1,14 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import type { UserData, AppView, AppSettings, GalleryItem, ChatSession } from './types';
 import { saveUserData } from './services/secureStorage';
 import { AuthScreen } from './components/AuthScreen';
-import { ImageGenScreen } from './components/ImageGenScreen';
-import { SettingsScreen } from './components/SettingsScreen';
-import { ChatScreen } from './components/ChatScreen';
-import { Gallery } from './components/Gallery';
+// Lazy-loaded screen components for code splitting
+const ImageGenScreen = lazy(() => import('./components/ImageGenScreen').then(m => ({ default: m.ImageGenScreen })));
+const SettingsScreen = lazy(() => import('./components/SettingsScreen').then(m => ({ default: m.SettingsScreen })));
+const ChatScreen = lazy(() => import('./components/ChatScreen').then(m => ({ default: m.ChatScreen })));
+const Gallery = lazy(() => import('./components/Gallery').then(m => ({ default: m.Gallery })));
 import { ImageViewer } from './components/ImageViewer';
 import type { ToastMessage, ToastType } from './components/Toast';
 import { Toast } from './components/Toast';
+import { ScreenSkeleton } from './components/ScreenSkeleton';
 import { upscaleImage } from './services/veniceService';
 import { compressImage } from './utils';
 import { Palette, MessageSquare, Settings as SettingsIcon, LogOut, Layers, Code } from 'lucide-react';
@@ -243,39 +245,41 @@ export default function App() {
                 </header>
 
                 <div className="animate-fadeIn">
-                    {currentView === 'image-gen' && (
-                        <ImageGenScreen
-                            settings={user.settings}
-                            recentItems={user.gallery}
-                            onNewItem={addToGallery}
-                            onUpdateItem={updateGalleryItem}
-                            onViewItem={setViewingItem}
-                            onAddToast={addToast}
-                        />
-                    )}
+                    <Suspense fallback={<ScreenSkeleton />}>
+                        {currentView === 'image-gen' && (
+                            <ImageGenScreen
+                                settings={user.settings}
+                                recentItems={user.gallery}
+                                onNewItem={addToGallery}
+                                onUpdateItem={updateGalleryItem}
+                                onViewItem={setViewingItem}
+                                onAddToast={addToast}
+                            />
+                        )}
 
-                    {currentView === 'gallery' && (
-                        <Gallery
-                            items={user.gallery}
-                            onEnhance={handleEnhance}
-                            onView={setViewingItem}
-                        />
-                    )}
+                        {currentView === 'gallery' && (
+                            <Gallery
+                                items={user.gallery}
+                                onEnhance={handleEnhance}
+                                onView={setViewingItem}
+                            />
+                        )}
 
-                    {currentView === 'chat' && (
-                        <ChatScreen
-                            settings={user.settings}
-                            chats={user.chats}
-                            onUpdateChats={updateChats}
-                        />
-                    )}
+                        {currentView === 'chat' && (
+                            <ChatScreen
+                                settings={user.settings}
+                                chats={user.chats}
+                                onUpdateChats={updateChats}
+                            />
+                        )}
 
-                    {currentView === 'settings' && (
-                        <SettingsScreen
-                            settings={user.settings}
-                            onSave={updateSettings}
-                        />
-                    )}
+                        {currentView === 'settings' && (
+                            <SettingsScreen
+                                settings={user.settings}
+                                onSave={updateSettings}
+                            />
+                        )}
+                    </Suspense>
                 </div>
             </main>
 

@@ -129,26 +129,37 @@ export const generateGeminiVideo = async (
 
     onStatusUpdate?.("Submitting video generation request...");
 
-    // Build Request
-    const generateOptions: GenerateVideosConfig = {
+    // Build Config (separate from model and prompt)
+    const videoConfig: GenerateVideosConfig = {
+        numberOfVideos: 1,
+        resolution: params.geminiConfig?.videoResolution || '720p',
+        aspectRatio: params.aspectRatio || '16:9'
+    };
+
+    // Build the full parameters object
+    interface VeoGenerateParams {
+        model: string;
+        prompt: string;
+        config?: GenerateVideosConfig;
+        image?: { imageBytes: string; mimeType: string };
+    }
+
+    const generateParams: VeoGenerateParams = {
         model: model,
         prompt: params.prompt,
-        config: {
-            numberOfVideos: 1,
-            resolution: params.geminiConfig?.videoResolution || '720p', // fast-generate usually supports 720p or 1080p
-            aspectRatio: params.aspectRatio || '16:9'
-        }
+        config: videoConfig
     };
 
     // Add Image input if present (Image-to-Video)
     if (params.geminiConfig?.inputImageBase64) {
-        generateOptions.image = {
+        generateParams.image = {
             imageBytes: params.geminiConfig.inputImageBase64,
             mimeType: 'image/jpeg' // Assuming JPEG for simplicity, Veo supports PNG too
         };
     }
 
-    let operation = await client.models.generateVideos(generateOptions);
+    // Cast to pass to API - the SDK expects GenerateVideosParameters
+    let operation = await client.models.generateVideos(generateParams as Parameters<typeof client.models.generateVideos>[0]);
 
     onStatusUpdate?.("Processing video... this may take a minute.");
 
