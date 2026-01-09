@@ -1,5 +1,12 @@
 import { CONFIG } from "../constants";
-import type { GalleryItem } from "../types";
+import type { GalleryItem, GenerationParams } from "../types";
+
+// Type for updates that can include both direct GalleryItem properties
+// and flattened dot-notation params.* keys
+type GalleryItemUpdate = Partial<Omit<GalleryItem, 'params'>> & {
+    params?: Partial<GenerationParams>;
+    [key: `params.${string}`]: string | number | boolean | undefined;
+};
 
 // Mock User interface as we are removing firebase/auth dependency
 export interface User {
@@ -54,7 +61,7 @@ export const saveImageToHistory = async (userId: string, item: Omit<GalleryItem,
     return newItem;
 };
 
-export const updateImageInHistory = async (userId: string, docId: string, updates: any) => {
+export const updateImageInHistory = async (_userId: string, docId: string, updates: GalleryItemUpdate) => {
     const items = getLocalHistory();
     const index = items.findIndex(i => i.id === docId);
     if (index !== -1) {
@@ -63,23 +70,23 @@ export const updateImageInHistory = async (userId: string, docId: string, update
         // Handle flattened dot notation updates manually if needed, 
         // or expect the caller to pass nested objects. 
         // For 'params.enhanced' style keys:
-        const newParams = { ...currentItem.params };
-        const cleanUpdates = { ...updates };
+        const newParams: Record<string, unknown> = { ...currentItem.params };
+        const cleanUpdates: Partial<GalleryItem> = {};
 
         Object.keys(updates).forEach(key => {
             if (key.startsWith('params.')) {
                 const paramKey = key.split('.')[1];
-                // Cast to any to avoid "Type 'any' is not assignable to type 'never'" error
-                // because GenerationParams has mixed value types (string | number | boolean).
-                (newParams as any)[paramKey] = updates[key];
-                delete cleanUpdates[key];
+                newParams[paramKey] = updates[key as `params.${string}`];
+            } else if (key !== 'params') {
+                // Copy non-params keys to cleanUpdates
+                (cleanUpdates as Record<string, unknown>)[key] = updates[key as keyof GalleryItemUpdate];
             }
         });
 
         items[index] = {
             ...currentItem,
             ...cleanUpdates,
-            params: newParams
+            params: newParams as GenerationParams
         };
         setLocalHistory(items);
     }

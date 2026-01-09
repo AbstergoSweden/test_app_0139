@@ -16,7 +16,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const knownUsers = getRegisteredUsers();
+    const knownUsers = useMemo(() => getRegisteredUsers(), []);
     
     // Evaluate password strength for registration mode
     const passwordStrength = useMemo(() => {
@@ -32,7 +32,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
         } else if (knownUsers.length > 0) {
             setUsername(knownUsers[0]);
         }
-    }, []);
+    }, [knownUsers]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

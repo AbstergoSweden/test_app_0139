@@ -245,8 +245,8 @@ Priority 2 - Medium Effort (1-4 hours each):
 [DONE] 6. Data migration for old user formats
 [DONE] 7. Optimistic updates for image generation
 [DONE] 8. E2E test framework setup
-[TODO] 9. Fix remaining `any` type warnings (25 warnings)
-[TODO] 10. Fix React hooks dependency warnings (2 warnings)
+[DONE] 9. Fix remaining `any` type warnings (25 warnings)
+[DONE] 10. Fix React hooks dependency warnings (2 warnings)
 
 Priority 3 - Larger Refactors (4+ hours):
 [TODO] 11. Code splitting to reduce bundle size (~1.3MB)
@@ -272,13 +272,14 @@ A) Fix "working tree dirty due to package-lock.json"
        git add package-lock.json
        git commit -m "chore: update package-lock"
 
-B) Fix React hooks exhaustive-deps warnings
-   - Ensure all values referenced in useEffect are included in dependency arrays
-   - Or refactor to use useMemo/useCallback where appropriate
+B) [FIXED] React hooks exhaustive-deps warnings
+   - All useEffect hooks now have proper dependency arrays
+   - Used useMemo to memoize values and functional updates where appropriate
 
-C) Fix @typescript-eslint/no-explicit-any warnings
-   - Introduce typed interfaces for API responses and local state
-   - Use unknown + type guards where runtime validation is needed
+C) [FIXED] @typescript-eslint/no-explicit-any warnings
+   - Introduced typed interfaces for API responses and local state
+   - Used unknown + type guards for error handling
+   - Imported proper types from @google/genai package
 EOF
 }
 

@@ -61,7 +61,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ onGenerate, isGenera
                 ]);
                 setModels(fetchedModels);
                 setStyles(fetchedStyles);
-                if (fetchedModels.length > 0 && selectedModel === 'default') setSelectedModel(fetchedModels[0].id);
+                if (fetchedModels.length > 0) {
+                    setSelectedModel((current) => current === 'default' ? fetchedModels[0].id : current);
+                }
             }
         };
         initData();
@@ -176,8 +178,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ onGenerate, isGenera
             }
             setPrompt(newPrompt);
             setSuggestionIdea('');
-        } catch (error: any) {
-            alert(`Failed to suggest prompt. ${error.message}`);
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Unknown error";
+            alert(`Failed to suggest prompt. ${message}`);
         } finally {
             setIsSuggesting(false);
         }
@@ -200,8 +203,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ onGenerate, isGenera
                 throw new Error("No API Key configured for either service.");
             }
             setPrompt(enhanced);
-        } catch (error: any) {
-            alert(`Failed to enhance prompt. ${error.message}`);
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Unknown error";
+            alert(`Failed to enhance prompt. ${message}`);
         } finally {
             setIsEnhancingPrompt(false);
         }
@@ -394,7 +398,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ onGenerate, isGenera
                                 <label className="block text-sm font-medium text-slate-300 mb-2">Size (Quality)</label>
                                 <select
                                     value={geminiImageSize}
-                                    onChange={(e) => setGeminiImageSize(e.target.value as any)}
+                                    onChange={(e) => setGeminiImageSize(e.target.value as '1K' | '2K' | '4K')}
                                     className="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-orange-500"
                                 >
                                     <option value="1K">1K (Standard)</option>
