@@ -99,7 +99,16 @@ export const fetchStyles = async (apiKey?: string): Promise<string[]> => {
     }
 };
 
-const attemptApiCall = async (url: string, data: Record<string, unknown>, keyIndex = 0, isBinaryResponse = false, retries = 0, overrideKey?: string): Promise<VeniceResponse | VeniceChatResponse | Response> => {
+// Venice API payload types
+type VenicePayload = VeniceImageGeneratePayload | VeniceChatPayload | EnhancementParams;
+
+// Internal interface for chat payload structure
+interface VeniceChatPayload {
+    model: string;
+    messages: { role: string; content: string }[];
+}
+
+const attemptApiCall = async (url: string, data: VenicePayload, keyIndex = 0, isBinaryResponse = false, retries = 0, overrideKey?: string): Promise<VeniceResponse | VeniceChatResponse | Response> => {
     let apiKey = overrideKey;
     if (!apiKey) {
         if (CONFIG.API_KEYS.length === 0) throw new Error("No Venice API Key configured. Please add your API Key in Settings.");
@@ -185,33 +194,34 @@ export const generateImage = async (params: GenerationParams, apiKey?: string): 
         payload.style_preset = params.style_preset;
     }
 
-    return attemptApiCall(`${CONFIG.BASE_API_URL}/image/generate`, payload as unknown as Record<string, unknown>, 0, false, 0, apiKey) as Promise<VeniceResponse>;
+    const result = await attemptApiCall(`${CONFIG.BASE_API_URL}/image/generate`, payload, 0, false, 0, apiKey);
+    return result as VeniceResponse;
 };
 
 export const generateChatResponse = async (messages: ChatMessage[], model: string, apiKey: string, systemPrompt?: string): Promise<string> => {
-    const payload = {
+    const payload: VeniceChatPayload = {
         model,
         messages: [
             ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
             ...messages.map(m => ({ role: m.role === 'model' ? 'assistant' : m.role, content: m.content }))
         ]
     };
-    const result = await attemptApiCall(`${CONFIG.BASE_API_URL}/chat/completions`, payload as unknown as Record<string, unknown>, 0, false, 0, apiKey) as VeniceChatResponse;
-    return result.choices[0].message.content;
+    const result = await attemptApiCall(`${CONFIG.BASE_API_URL}/chat/completions`, payload, 0, false, 0, apiKey);
+    return (result as VeniceChatResponse).choices[0].message.content;
 };
 
 export const upscaleImage = async (params: EnhancementParams, apiKey?: string): Promise<Blob> => {
     // attemptApiCall returns the raw Response object when isBinaryResponse is true
-    const response = await attemptApiCall(`${CONFIG.BASE_API_URL}/image/upscale`, params as unknown as Record<string, unknown>, 0, true, 0, apiKey) as Response;
-    return response.blob();
+    const response = await attemptApiCall(`${CONFIG.BASE_API_URL}/image/upscale`, params, 0, true, 0, apiKey);
+    return (response as Response).blob();
 };
 
 export const suggestPromptVenice = async (idea: string, apiKey: string): Promise<string> => {
     const prompt = `Create a detailed, creative image generation prompt based on this idea: "${idea}". The prompt should be descriptive and ready for an AI image generator. Output ONLY the prompt text, no conversational filler.`;
-    return await generateChatResponse([{ role: 'user', content: prompt }], "llama-3.3-70b", apiKey);
+    return await generateChatResponse([{ role: 'user', content: prompt, timestamp: Date.now() }], "llama-3.3-70b", apiKey);
 };
 
 export const enhancePromptVenice = async (currentPrompt: string, apiKey: string): Promise<string> => {
     const systemPrompt = "You are an expert prompt engineer. Your task is to enhance the user's prompt by adding artistic details, lighting, mood, and style keywords to improve image generation quality. Maintain the original intent. Output ONLY the enhanced prompt.";
-    return await generateChatResponse([{ role: 'user', content: currentPrompt }], "llama-3.3-70b", apiKey, systemPrompt);
+    return await generateChatResponse([{ role: 'user', content: currentPrompt, timestamp: Date.now() }], "llama-3.3-70b", apiKey, systemPrompt);
 };

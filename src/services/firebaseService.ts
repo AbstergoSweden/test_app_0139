@@ -1,12 +1,13 @@
 import { CONFIG } from "../constants";
 import type { GalleryItem, GenerationParams } from "../types";
 
-// Type for updates that can include both direct GalleryItem properties
-// and flattened dot-notation params.* keys
-type GalleryItemUpdate = Partial<Omit<GalleryItem, 'params'>> & {
-    params?: Partial<GenerationParams>;
-    [key: `params.${string}`]: string | number | boolean | undefined;
+// Flattened params update (e.g., { 'params.enhanced': true })
+type FlattenedParamsUpdate = {
+    [K in keyof GenerationParams as `params.${K & string}`]?: GenerationParams[K];
 };
+
+// Type for updates: either direct properties or flattened params notation
+type GalleryItemUpdate = Partial<Omit<GalleryItem, 'params'>> & FlattenedParamsUpdate;
 
 // Mock User interface as we are removing firebase/auth dependency
 export interface User {
@@ -67,26 +68,32 @@ export const updateImageInHistory = async (_userId: string, docId: string, updat
     if (index !== -1) {
         const currentItem = items[index];
 
-        // Handle flattened dot notation updates manually if needed, 
-        // or expect the caller to pass nested objects. 
-        // For 'params.enhanced' style keys:
-        const newParams: Record<string, unknown> = { ...currentItem.params };
-        const cleanUpdates: Partial<GalleryItem> = {};
+        // Handle flattened dot notation updates (e.g., 'params.enhanced')
+        // and direct property updates separately
+        const newParams = { ...currentItem.params };
+        const cleanUpdates: Partial<Omit<GalleryItem, 'params'>> = {};
 
-        Object.keys(updates).forEach(key => {
+        for (const key of Object.keys(updates)) {
             if (key.startsWith('params.')) {
-                const paramKey = key.split('.')[1];
-                newParams[paramKey] = updates[key as `params.${string}`];
-            } else if (key !== 'params') {
-                // Copy non-params keys to cleanUpdates
-                (cleanUpdates as Record<string, unknown>)[key] = updates[key as keyof GalleryItemUpdate];
+                const paramKey = key.slice(7) as keyof GenerationParams; // Remove 'params.' prefix
+                const value = updates[key as keyof FlattenedParamsUpdate];
+                if (value !== undefined) {
+                    // Use type-safe assignment by checking the specific param key
+                    Object.assign(newParams, { [paramKey]: value });
+                }
+            } else {
+                // Direct property update (id, base64, createdAt, mediaType)
+                const value = updates[key as keyof typeof cleanUpdates];
+                if (value !== undefined) {
+                    Object.assign(cleanUpdates, { [key]: value });
+                }
             }
-        });
+        }
 
         items[index] = {
             ...currentItem,
             ...cleanUpdates,
-            params: newParams as GenerationParams
+            params: newParams
         };
         setLocalHistory(items);
     }
