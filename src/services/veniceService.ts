@@ -108,6 +108,9 @@ interface VeniceChatPayload {
     messages: { role: string; content: string }[];
 }
 
+// Simplified message type for internal chat functions (only role and content needed)
+type SimpleChatMessage = Pick<ChatMessage, 'role' | 'content'>;
+
 const attemptApiCall = async (url: string, data: VenicePayload, keyIndex = 0, isBinaryResponse = false, retries = 0, overrideKey?: string): Promise<VeniceResponse | VeniceChatResponse | Response> => {
     let apiKey = overrideKey;
     if (!apiKey) {
@@ -198,7 +201,7 @@ export const generateImage = async (params: GenerationParams, apiKey?: string): 
     return result as VeniceResponse;
 };
 
-export const generateChatResponse = async (messages: ChatMessage[], model: string, apiKey: string, systemPrompt?: string): Promise<string> => {
+export const generateChatResponse = async (messages: SimpleChatMessage[], model: string, apiKey: string, systemPrompt?: string): Promise<string> => {
     const payload: VeniceChatPayload = {
         model,
         messages: [
@@ -218,10 +221,10 @@ export const upscaleImage = async (params: EnhancementParams, apiKey?: string): 
 
 export const suggestPromptVenice = async (idea: string, apiKey: string): Promise<string> => {
     const prompt = `Create a detailed, creative image generation prompt based on this idea: "${idea}". The prompt should be descriptive and ready for an AI image generator. Output ONLY the prompt text, no conversational filler.`;
-    return await generateChatResponse([{ role: 'user', content: prompt } as ChatMessage], "llama-3.3-70b", apiKey);
+    return await generateChatResponse([{ role: 'user', content: prompt }], "llama-3.3-70b", apiKey);
 };
 
 export const enhancePromptVenice = async (currentPrompt: string, apiKey: string): Promise<string> => {
     const systemPrompt = "You are an expert prompt engineer. Your task is to enhance the user's prompt by adding artistic details, lighting, mood, and style keywords to improve image generation quality. Maintain the original intent. Output ONLY the enhanced prompt.";
-    return await generateChatResponse([{ role: 'user', content: currentPrompt } as ChatMessage], "llama-3.3-70b", apiKey, systemPrompt);
+    return await generateChatResponse([{ role: 'user', content: currentPrompt }], "llama-3.3-70b", apiKey, systemPrompt);
 };
