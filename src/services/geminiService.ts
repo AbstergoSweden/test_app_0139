@@ -3,13 +3,6 @@ import type { Part, GroundingChunk, GenerateContentConfig, GenerateVideosConfig 
 import { SYSTEM_PROMPT_GEMINI } from "../constants";
 import type { GenerationParams, ChatMessage } from "../types";
 
-// Type for attachment in ChatMessage
-interface ChatAttachment {
-    type: 'image' | 'video';
-    base64: string;
-    mimeType: string;
-}
-
 let ai: GoogleGenAI | null = null;
 let currentKey: string | null = null;
 
@@ -235,7 +228,7 @@ export const generateGeminiChat = async (
 
         // Add attachments
         if (msg.attachments) {
-            msg.attachments.forEach((att: ChatAttachment) => {
+            msg.attachments.forEach((att) => {
                 parts.push({
                     inlineData: {
                         mimeType: att.mimeType,

@@ -218,10 +218,10 @@ export const upscaleImage = async (params: EnhancementParams, apiKey?: string): 
 
 export const suggestPromptVenice = async (idea: string, apiKey: string): Promise<string> => {
     const prompt = `Create a detailed, creative image generation prompt based on this idea: "${idea}". The prompt should be descriptive and ready for an AI image generator. Output ONLY the prompt text, no conversational filler.`;
-    return await generateChatResponse([{ role: 'user', content: prompt, timestamp: Date.now() }], "llama-3.3-70b", apiKey);
+    return await generateChatResponse([{ role: 'user', content: prompt } as ChatMessage], "llama-3.3-70b", apiKey);
 };
 
 export const enhancePromptVenice = async (currentPrompt: string, apiKey: string): Promise<string> => {
     const systemPrompt = "You are an expert prompt engineer. Your task is to enhance the user's prompt by adding artistic details, lighting, mood, and style keywords to improve image generation quality. Maintain the original intent. Output ONLY the enhanced prompt.";
-    return await generateChatResponse([{ role: 'user', content: currentPrompt, timestamp: Date.now() }], "llama-3.3-70b", apiKey, systemPrompt);
+    return await generateChatResponse([{ role: 'user', content: currentPrompt } as ChatMessage], "llama-3.3-70b", apiKey, systemPrompt);
 };
