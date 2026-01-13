@@ -17,15 +17,12 @@ interface ControlPanelProps {
 }
 
 export const ControlPanel: React.FC<ControlPanelProps> = ({ onGenerate, isGenerating, apiKey, geminiKey }) => {
-    // --- Global State ---
     const [provider, setProvider] = useState<'venice' | 'gemini'>('venice');
     const [mode, setMode] = useState<'image' | 'video'>('image');
 
-    // --- Form Values ---
     const [models, setModels] = useState<Model[]>([]);
     const [styles, setStyles] = useState<string[]>([]);
 
-    // Venice Specific
     const [selectedModel, setSelectedModel] = useState<string>('default');
     const [selectedStyle, setSelectedStyle] = useState<string>('none');
     const [steps, setSteps] = useState(30);
@@ -33,20 +30,16 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ onGenerate, isGenera
     const [hideWatermark, _setHideWatermark] = useState(true);
     const [safeMode, _setSafeMode] = useState(false);
 
-    // Gemini Specific
     const [geminiImageSize, setGeminiImageSize] = useState<'1K' | '2K' | '4K'>('1K');
     const [geminiAspectRatio, setGeminiAspectRatio] = useState<string>('1:1');
-    const [inputImage, setInputImage] = useState<string | null>(null); // Base64 for Image-to-Video
+    const [inputImage, setInputImage] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Shared
     const [prompt, setPrompt] = useState('');
-    // Initialize empty as requested
     const [negativePrompt, setNegativePrompt] = useState(CONFIG.DEFAULT_NEGATIVE_PROMPT);
     const [seed, _setSeed] = useState<string>('');
-    const [aspectRatio, setAspectRatio] = useState('square'); // Venice simplified
+    const [aspectRatio, setAspectRatio] = useState('square');
 
-    // AI Helper States
     const [isSuggesting, setIsSuggesting] = useState(false);
     const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
     const [suggestionModalOpen, setSuggestionModalOpen] = useState(false);
@@ -124,7 +117,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ onGenerate, isGenera
             onGenerate(params, variants);
         }
 
-        // --- Gemini Generation ---
         else {
             if (!geminiKey) {
                 alert("Please configure your Gemini API Key in Settings.");
@@ -144,7 +136,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ onGenerate, isGenera
                 format: 'png',
                 embed_exif_metadata: false,
 
-                // Specifics
                 aspectRatio: geminiAspectRatio,
                 geminiConfig: {
                     imageSize: geminiImageSize,
@@ -152,7 +143,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ onGenerate, isGenera
                     inputImageBase64: inputImage || undefined
                 }
             };
-            onGenerate(params, 1); // No variants for Gemini/Veo usually
+            onGenerate(params, 1);
         }
     };
 
@@ -162,16 +153,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ onGenerate, isGenera
         setIsSuggesting(true);
         try {
             let newPrompt = "";
-            // Strategy: Use current provider if key exists, else fallback
             if (provider === 'gemini' && geminiKey) {
                 newPrompt = await suggestPromptGemini(suggestionIdea, geminiKey);
             } else if (provider === 'venice' && apiKey) {
                 newPrompt = await suggestPromptVenice(suggestionIdea, apiKey);
             } else if (geminiKey) {
-                // Fallback to Gemini
                 newPrompt = await suggestPromptGemini(suggestionIdea, geminiKey);
             } else if (apiKey) {
-                // Fallback to Venice
                 newPrompt = await suggestPromptVenice(suggestionIdea, apiKey);
             } else {
                 throw new Error("No API Key configured for either service.");

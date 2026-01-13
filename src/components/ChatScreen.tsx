@@ -23,7 +23,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ settings, chats, onUpdat
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // New Features State
     const [useThinking, setUseThinking] = useState(false);
     const [useSearch, setUseSearch] = useState(false);
     const [attachments, setAttachments] = useState<{ type: 'image' | 'video', base64: string, mimeType: string }[]>([]);
@@ -129,7 +128,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ settings, chats, onUpdat
                 const apiKey = settings.geminiApiKey || process.env.API_KEY;
                 if (!apiKey) throw new Error("Gemini API Key missing");
 
-                // Use Enhanced Chat Service
                 responseText = await generateGeminiChat(
                     [...activeChat.messages, userMsg],
                     apiKey,
@@ -138,7 +136,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ settings, chats, onUpdat
                 );
 
             } else if (settings.veniceApiKey) {
-                // Venice (Standard Text)
                 responseText = await generateChatResponse(
                     [...activeChat.messages, userMsg],
                     modelName,

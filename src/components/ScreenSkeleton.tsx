@@ -1,9 +1,5 @@
 import React from 'react';
 
-/**
- * Skeleton loading component for lazy-loaded screens.
- * Provides visual feedback while screen components are being loaded.
- */
 export const ScreenSkeleton: React.FC = () => (
   <div className="animate-pulse space-y-6">
     {/* Header skeleton */}
