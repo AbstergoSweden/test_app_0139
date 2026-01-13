@@ -1,12 +1,10 @@
 import type { CryptoWorkerRequest, CryptoWorkerResponse, CryptoWorkerErrorResponse } from '../types/crypto';
 
-// Configurable Security Parameters
 const ITERATIONS_NEW = 310000;
 const SALT_SIZE_NEW = 64;
 const ITERATIONS_LEGACY = 100000;
 const SALT_SIZE_LEGACY = 16;
 
-// Web Worker instance (lazily initialized)
 let cryptoWorker: Worker | null = null;
 let workerSupported = true;
 let requestIdCounter = 0;
@@ -15,15 +13,11 @@ const pendingRequests = new Map<string, {
     reject: (error: Error) => void;
 }>();
 
-/**
- * Initializes the crypto Web Worker if available.
- */
 const getCryptoWorker = (): Worker | null => {
     if (!workerSupported) return null;
 
     if (!cryptoWorker) {
         try {
-            // Vite handles ?worker imports
             cryptoWorker = new Worker(
                 new URL('../workers/crypto.worker.ts', import.meta.url),
                 { type: 'module' }
@@ -38,7 +32,6 @@ const getCryptoWorker = (): Worker | null => {
 
                 if (response.success) {
                     try {
-                        // Import the raw key bytes back as a CryptoKey
                         const key = await window.crypto.subtle.importKey(
                             'raw',
                             response.keyData,
@@ -57,7 +50,6 @@ const getCryptoWorker = (): Worker | null => {
             };
 
             cryptoWorker.onerror = () => {
-                // Worker failed, fall back to main thread
                 workerSupported = false;
                 cryptoWorker?.terminate();
                 cryptoWorker = null;
@@ -71,9 +63,6 @@ const getCryptoWorker = (): Worker | null => {
     return cryptoWorker;
 };
 
-/**
- * Derives key using Web Worker (off main thread).
- */
 const deriveKeyViaWorker = (password: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> => {
     return new Promise((resolve, reject) => {
         const worker = getCryptoWorker();

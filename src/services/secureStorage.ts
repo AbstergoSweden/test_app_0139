@@ -88,19 +88,13 @@ export const registerUser = async (username: string, password: string): Promise<
     return initialData;
 };
 
-/**
- * Strips base64 data from gallery items for metadata-only storage.
- */
 const stripBlobsFromGallery = (gallery: GalleryItem[]): GalleryItem[] => {
     return gallery.map(item => ({
         ...item,
-        base64: '', // Store empty string, actual blob is in IndexedDB
+        base64: '', // Blobs stored separately in IndexedDB
     }));
 };
 
-/**
- * Rehydrates gallery items with blob data from IndexedDB.
- */
 const rehydrateGalleryBlobs = async (gallery: GalleryItem[]): Promise<GalleryItem[]> => {
     if (gallery.length === 0) return gallery;
 
@@ -109,7 +103,7 @@ const rehydrateGalleryBlobs = async (gallery: GalleryItem[]): Promise<GalleryIte
 
     return gallery.map(item => ({
         ...item,
-        base64: blobs.get(item.id) ?? item.base64, // Use IndexedDB blob or keep existing
+        base64: blobs.get(item.id) ?? item.base64, // Restore from IndexedDB
     }));
 };
 
@@ -119,31 +113,22 @@ export const loginUser = async (username: string, password: string): Promise<Use
 
     const decryptedData = await decryptData(rawData, password);
     
-    // Apply migrations if needed
-    const { data: userData, migrated, fromVersion } = migrateUserData(decryptedData);
-    
-    if (migrated) {
-        console.log(`[SecureStorage] Migrated user data from v${fromVersion} to current version`);
-    }
+    const { data: userData } = migrateUserData(decryptedData);
 
-    // Rehydrate blobs from IndexedDB
     userData.gallery = await rehydrateGalleryBlobs(userData.gallery);
 
     return userData;
 };
 
 export const saveUserData = async (data: UserData, password: string): Promise<void> => {
-    // Don't save dev user to local storage to avoid corrupting real data
     if (data.username === 'dev') return;
 
-    // Save blobs to IndexedDB first
     for (const item of data.gallery) {
         if (item.base64 && item.base64.length > 0) {
             await saveBlob(item.id, item.base64);
         }
     }
 
-    // Create metadata-only copy with version stamp (no base64 data)
     const metadataOnly = stampDataVersion({
         ...data,
         gallery: stripBlobsFromGallery(data.gallery),
@@ -161,17 +146,6 @@ export const saveUserData = async (data: UserData, password: string): Promise<vo
 };
 
 export const deleteUser = async (username: string): Promise<void> => {
-    // First, try to get the user's gallery IDs to clean up blobs
-    try {
-        const rawData = localStorage.getItem(USER_PREFIX + username);
-        if (rawData) {
-            // We can't decrypt without password, so we'll do a best-effort cleanup
-            // by removing all blobs that are orphaned after user deletion
-        }
-    } catch {
-        // Ignore errors, continue with deletion
-    }
-
     const users = getRegisteredUsers().filter(u => u !== username);
     localStorage.setItem(USERS_INDEX_KEY, JSON.stringify(users));
     localStorage.removeItem(USER_PREFIX + username);
@@ -180,10 +154,6 @@ export const deleteUser = async (username: string): Promise<void> => {
     }
 };
 
-/**
- * Cleans up orphaned blobs that are no longer referenced by any gallery.
- * Call this periodically or after gallery item deletion.
- */
 export const cleanupOrphanedBlobs = async (activeGalleryIds: string[]): Promise<void> => {
     try {
         const allBlobIds = await getAllBlobIds();

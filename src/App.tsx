@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import type { UserData, AppView, AppSettings, GalleryItem, ChatSession } from './types';
 import { saveUserData } from './services/secureStorage';
 import { AuthScreen } from './components/AuthScreen';
-// Lazy-loaded screen components for code splitting
 const ImageGenScreen = lazy(() => import('./components/ImageGenScreen').then(m => ({ default: m.ImageGenScreen })));
 const SettingsScreen = lazy(() => import('./components/SettingsScreen').then(m => ({ default: m.SettingsScreen })));
 const ChatScreen = lazy(() => import('./components/ChatScreen').then(m => ({ default: m.ChatScreen })));
@@ -21,24 +20,19 @@ export default function App() {
     const [currentView, setCurrentView] = useState<AppView>('auth');
     const [viewingItem, setViewingItem] = useState<GalleryItem | null>(null);
 
-    // Enhancement State
     const [isEnhancing, setIsEnhancing] = useState(false);
     const [enhanceProgress, setEnhanceProgress] = useState(0);
     const progressInterval = useRef<number | null>(null);
 
-    // Toast State
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-    // Debounced save ref to prevent rapid re-encryption on every state change
     const saveTimeoutRef = useRef<number | null>(null);
 
-    // Toast helper needs to be available before the save effect
     const addToast = (message: string, type: ToastType = 'info') => {
         const id = Date.now().toString() + Math.random().toString();
         setToasts(prev => [...prev, { id, message, type }]);
     };
 
-    // Save user data with debouncing (2s delay) to avoid blocking UI
     useEffect(() => {
         if (user && password) {
             if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -65,8 +59,6 @@ export default function App() {
         setPassword('');
         setCurrentView('auth');
     };
-
-    // --- State Handlers ---
 
     const removeToast = (id: string) => {
         setToasts(prev => prev.filter(t => t.id !== id));
@@ -115,15 +107,14 @@ export default function App() {
         setIsEnhancing(true);
         setEnhanceProgress(0);
 
-        // Start fake progress
         if (progressInterval.current) clearInterval(progressInterval.current);
         progressInterval.current = window.setInterval(() => {
             setEnhanceProgress(prev => {
-                if (prev >= 90) return prev; // Cap at 90%
-                const increment = Math.random() * 5 + 1; // Random increment 1-6%
+                if (prev >= 90) return prev;
+                const increment = Math.random() * 5 + 1;
                 return Math.min(90, prev + increment);
             });
-        }, 500); // Update every 500ms
+        }, 500);
 
         try {
             const resultBlob = await upscaleImage({
@@ -133,7 +124,6 @@ export default function App() {
                 enhanceCreativity: 0.5
             }, user?.settings.veniceApiKey);
 
-            // Finish progress
             if (progressInterval.current) clearInterval(progressInterval.current);
             setEnhanceProgress(100);
 
@@ -150,7 +140,7 @@ export default function App() {
                 };
 
                 addToGallery(newItem);
-                setViewingItem(newItem); // Switch view to enhanced item
+                setViewingItem(newItem);
                 addToast("Image enhanced successfully!", "success");
 
                 setTimeout(() => {
@@ -174,11 +164,8 @@ export default function App() {
         return <AuthScreen onAuthenticated={handleAuthenticated} />;
     }
 
-    // --- Main Layout ---
-
     return (
         <div className="flex min-h-screen bg-gray-900 text-white font-sans">
-            {/* Sidebar Navigation */}
             <aside className="w-20 lg:w-64 bg-gray-800 border-r border-gray-700 flex flex-col items-center lg:items-stretch py-6 gap-2 z-10">
                 <div className="mb-8 px-4 flex items-center justify-center lg:justify-start gap-3">
                     <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0 relative">
@@ -233,7 +220,6 @@ export default function App() {
                 </div>
             </aside>
 
-            {/* Main Content Area */}
             <main className="flex-1 p-4 lg:p-8 overflow-y-auto relative">
                 <header className="mb-8 flex justify-between items-center">
                     <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
@@ -283,7 +269,6 @@ export default function App() {
                 </div>
             </main>
 
-            {/* Toast Container */}
             <div className="fixed bottom-4 right-4 z-[100] flex flex-col items-end pointer-events-none gap-2">
                 {toasts.map(toast => (
                     <div key={toast.id} className="pointer-events-auto">
@@ -292,7 +277,6 @@ export default function App() {
                 ))}
             </div>
 
-            {/* View Modal */}
             {viewingItem && (
                 <ImageViewer
                     item={viewingItem}
@@ -307,7 +291,6 @@ export default function App() {
     );
 }
 
-// Helper Nav Component
 interface NavButtonProps {
     active: boolean;
     onClick: () => void;

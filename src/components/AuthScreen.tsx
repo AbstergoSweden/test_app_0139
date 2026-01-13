@@ -24,7 +24,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
         return evaluatePasswordStrength(password);
     }, [password, mode]);
 
-    // Memory: Load last user on mount
     useEffect(() => {
         const lastUser = getLastUser();
         if (lastUser && knownUsers.includes(lastUser)) {
@@ -122,10 +121,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
                             required
                         />
                         
-                        {/* Password Strength Indicator - only show in register mode */}
                         {mode === 'register' && password && passwordStrength && (
                             <div className="mt-2 space-y-2">
-                                {/* Strength bar */}
                                 <div className="flex gap-1">
                                     {[0, 1, 2, 3, 4].map((level) => (
                                         <div
@@ -138,7 +135,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
                                         />
                                     ))}
                                 </div>
-                                {/* Strength label and feedback */}
                                 <div className="flex justify-between items-start text-xs">
                                     <span className={`font-medium ${
                                         passwordStrength.score >= MIN_PASSWORD_SCORE 

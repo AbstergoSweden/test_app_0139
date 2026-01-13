@@ -17,7 +17,6 @@ export const Gallery: React.FC<GalleryProps> = ({ items, onEnhance, onView, isLo
   const [sortBy, setSortBy] = useState<'date' | 'model'>('date');
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Extract unique models for filter dropdown
   const uniqueModels = useMemo(() => {
     const models = new Set(items.map(i => i.params.model));
     return Array.from(models);
@@ -26,15 +25,12 @@ export const Gallery: React.FC<GalleryProps> = ({ items, onEnhance, onView, isLo
   const filteredAndSortedItems = useMemo(() => {
     let result = [...items];
 
-    // Filter
     if (filterModel !== 'all') {
       result = result.filter(item => item.params.model === filterModel);
     }
 
-    // Sort
     result.sort((a, b) => {
       if (sortBy === 'date') {
-        // Sort by timestamp desc (newest first)
         return (b.createdAt || 0) - (a.createdAt || 0);
       } else if (sortBy === 'model') {
         return a.params.model.localeCompare(b.params.model);
@@ -45,13 +41,11 @@ export const Gallery: React.FC<GalleryProps> = ({ items, onEnhance, onView, isLo
     return result;
   }, [items, filterModel, sortBy]);
 
-  // Pagination calculations
   const totalPages = Math.ceil(filteredAndSortedItems.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
   const paginatedItems = filteredAndSortedItems.slice(startIndex, endIndex);
   
-  // Reset to page 1 when filters change
   const handleFilterChange = (value: string) => {
     setFilterModel(value);
     setCurrentPage(1);

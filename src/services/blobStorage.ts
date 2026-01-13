@@ -1,23 +1,15 @@
-/**
- * IndexedDB-based blob storage for gallery images and videos.
- * Moves large base64 data out of localStorage to avoid quota limits.
- */
-
 const DB_NAME = 'venice_blob_store';
 const DB_VERSION = 1;
 const STORE_NAME = 'blobs';
 
 interface BlobEntry {
     id: string;
-    data: string; // base64 encoded
+    data: string;
     createdAt: number;
 }
 
 let dbInstance: IDBDatabase | null = null;
 
-/**
- * Opens the IndexedDB database, creating the object store if needed.
- */
 const openDB = (): Promise<IDBDatabase> => {
     if (dbInstance) return Promise.resolve(dbInstance);
 
@@ -43,9 +35,6 @@ const openDB = (): Promise<IDBDatabase> => {
     });
 };
 
-/**
- * Saves a blob to IndexedDB.
- */
 export const saveBlob = async (id: string, data: string): Promise<void> => {
     const db = await openDB();
     return new Promise((resolve, reject) => {
@@ -94,9 +83,6 @@ export const getBlob = async (id: string): Promise<string | null> => {
     });
 };
 
-/**
- * Deletes a blob from IndexedDB.
- */
 export const deleteBlob = async (id: string): Promise<void> => {
     const db = await openDB();
     return new Promise((resolve, reject) => {
@@ -111,9 +97,6 @@ export const deleteBlob = async (id: string): Promise<void> => {
     });
 };
 
-/**
- * Retrieves multiple blobs by their IDs.
- */
 export const getBlobs = async (ids: string[]): Promise<Map<string, string>> => {
     const db = await openDB();
     const results = new Map<string, string>();
@@ -155,9 +138,6 @@ export const getBlobs = async (ids: string[]): Promise<Map<string, string>> => {
     });
 };
 
-/**
- * Deletes multiple blobs by their IDs.
- */
 export const deleteBlobs = async (ids: string[]): Promise<void> => {
     const db = await openDB();
     return new Promise((resolve, reject) => {
@@ -175,9 +155,6 @@ export const deleteBlobs = async (ids: string[]): Promise<void> => {
     });
 };
 
-/**
- * Clears all blobs from IndexedDB (useful for testing/reset).
- */
 export const clearAllBlobs = async (): Promise<void> => {
     const db = await openDB();
     return new Promise((resolve, reject) => {
@@ -192,9 +169,6 @@ export const clearAllBlobs = async (): Promise<void> => {
     });
 };
 
-/**
- * Gets all stored blob IDs (useful for cleanup/migration).
- */
 export const getAllBlobIds = async (): Promise<string[]> => {
     const db = await openDB();
     return new Promise((resolve, reject) => {
