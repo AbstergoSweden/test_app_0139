@@ -91,7 +91,7 @@ export const registerUser = async (username: string, password: string): Promise<
 const stripBlobsFromGallery = (gallery: GalleryItem[]): GalleryItem[] => {
     return gallery.map(item => ({
         ...item,
-        base64: '',
+        base64: '', // Blobs stored separately in IndexedDB
     }));
 };
 
@@ -103,7 +103,7 @@ const rehydrateGalleryBlobs = async (gallery: GalleryItem[]): Promise<GalleryIte
 
     return gallery.map(item => ({
         ...item,
-        base64: blobs.get(item.id) ?? item.base64,
+        base64: blobs.get(item.id) ?? item.base64, // Restore from IndexedDB
     }));
 };
 
